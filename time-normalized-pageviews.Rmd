@@ -1,0 +1,230 @@
+---
+title: "Time-Normalized Pageviews"
+output: html_notebook
+---
+
+This example is lifted straight from http://www.dartistics.com/googleanalytics/int-time-normalized.html, likely in incredibly poor form. But, it needed just enough tweaking that it seemed worth putting a slightly different version here.
+
+**Note: You need to follow the instructions on this page -- http://www.dartistics.com/googleanalytics/setup.html -- before proceeding in order for this code to work.**
+
+This example is best suited for a content-driven site or section of the site. For instance, if you push out a blog post once a week, then chances are that you see traffic to that post jump immediately after it is pushed out (as you promote it and as it pops up on the radar of fans and followers of your site/brand), and then traffic to the post tapers off at some rate. Suppose you have a hypothesis that some of your blog posts actually have greater "staying power" -- they may or may not have as great of an initial jump in traffic, but they "settle out" getting on-going traffic at a greater rate than other posts.
+
+So, this post pulls daily data for a bunch of pages, then tries to detect their launch date, time-normalizes the traffic for each page based on that presumed launch date, and then plots the daily traffic from "time 0" on out, as well as overall cumulative traffic.
+
+# Setup/Config
+
+```{r config}
+
+# Load the necessary libraries. 
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(googleAnalyticsR,  # How we actually get the Google Analytics data
+               tidyverse,         # Includes dplyr, ggplot2, and others; very key!
+               knitr,             # Nicer looking tables
+               plotly,            # We're going to make the charts interactive
+               scales)            # Useful for some number formatting in the visualizations
+
+# Authorize GA. Depending on if you've done this already and a .ga-httr-oauth file has
+# been saved or not, this may pop you over to a browser to authenticate.
+ga_auth(token = ".httr-oauth")
+
+# Set the view ID and the date range. If you want to, you can swap out the Sys.getenv()
+# call and just replace that with a hardcoded value for the view ID. 
+view_id <- Sys.getenv("GA_VIEW_ID")
+start_date <- Sys.Date() - 365        # The last year
+end_date <- Sys.Date() - 1            # Yesterday
+
+# You likely won't want to do this for the *entire* site. If you do, then simply enter
+# ".*" for this value. Otherwise, enter regEx that filters to the pages of interest (you
+# can experiment/test your regEx by entering it in the Pages report in the web interface
+# for GA).
+filter_regex <- "/blog/.+"
+filter_regex <- ".*"
+
+# We're going to have R try to figure out when a page actually launched by finding the
+# first day (in the data that is pulled) where the page had at least X unique pageviews.
+# So, we're going to set "X" here. This may be something to fiddle around with for your
+# site (the larger the site, the larger this number can be).
+first_day_pageviews_min <- 5
+
+# Set how many pages to include. This will include the top X pages by total unique 
+# pageviews
+total_pages_included <- 20
+
+# Finally, we want to set how many "days from launch" we want to include in our display.
+days_live_range <- 30
+```
+
+# Pull the Data
+
+This _will_ require a little bit of editing for your site, in that you will need to edit the filter definition to limit the data to the subset of pages on _your_ site that you want to compare.
+
+```{r data-pull, message=FALSE, warning=FALSE}
+
+# Create a dimension filter object. See ?dim_filter() for details. 
+page_filter_object <- dim_filter("pagePath", 
+                                   operator = "REGEXP",
+                                   expressions = filter_regex)
+
+# Now, put that filter object into a filter clause. The "operator" argument is moot -- it 
+# can be AND or OR...but you have to have it be something, even though it doesn't do anything
+# when there is only a single filter object.
+page_filter <- filter_clause_ga4(list(page_filter_object),
+                                          operator = "AND")
+
+# Pull the data. See ?google_analytics_4() for additional parameters. The anti_sample = TRUE
+# parameter will slow the query down a smidge and isn't strictly necessary, but it will
+# ensure you do not get sampled data.
+ga_data <- google_analytics(viewId = view_id,
+                            date_range = c(start_date, end_date),
+                            metrics = "uniquePageviews",
+                            dimensions = c("date","pagePath"),
+                            dim_filters = page_filter,
+                            anti_sample = TRUE)
+
+# Go ahead and do a quick inspection of the data that was returned. This isn't required,
+# but it's a good check along the way.
+kable(head(ga_data))
+```
+
+# Data Munging
+
+Here's where we're going to have some fun. We're going to need to find the "first day of meaningful traffic" (the first day in the data set that each page has at least `first_day_pageviews_min` unique pageviews).
+
+```{r munging, message=FALSE, warning=FALSE}
+
+# Find the first date for each. This is actually a little tricky, so we're going to write a 
+# function that takes each page as an input, filters the data to just include those
+# pages, finds the first page, and then puts a "from day 1" count on that data and
+# returns it.
+normalize_date_start <- function(page){
+  
+  # Filter all the data to just be the page being processed
+  ga_data_single_page <- ga_data %>% filter(pagePath == page)
+  
+  # Find the first value in the result that is greater than first_day_pageviews_min. In many
+  # cases, this will be the first row, but, if there has been testing/previews before it
+  # actually goes live, some noise may sneak in where the page may have been live, technically,
+  # but wasn't actually being considered live.
+  first_live_row <- min(which(ga_data_single_page$uniquePageviews > first_day_pageviews_min))
+  
+  # If the "first_live_row" is Inf, then none of the traffic for the page on any given day
+  # exceeded the first_day_pageviews_min value, so we're going to go ahead and exit the function
+  # with a NULL result
+  if(first_live_row == Inf){return(NULL)}
+
+  # Filter the data to start with that page
+  ga_data_single_page <- ga_data_single_page[first_live_row:nrow(ga_data_single_page),]
+  
+  # As the content ages, there may be days that have ZERO traffic. Those days won't show up as
+  # rows at all in our data. So, we actually need to create a data frame that includes
+  # all dates in the range from the "launch" until the last day traffic was recorded. There's
+  # a little trick here where we're going to make a column with a sequence of *dates* (date) and,
+  # with a slightly different "seq," a "days_live" that corresponds with each date.
+  normalized_results <- data.frame(date = seq.Date(from = min(ga_data_single_page$date), 
+                                                   to = max(ga_data_single_page$date), 
+                                                   by = "day"),
+                                   days_live = seq(min(ga_data_single_page$date):
+                                                     max(ga_data_single_page$date)),
+                                   page = page) %>% 
+    
+    # Join back to the original data to get the uniquePageviews
+    left_join(ga_data_single_page) %>%
+    
+    # Replace the "NAs" (days in the range with no uniquePageviews) with 0s (because 
+    # that's exactly what happened on those days!)
+    mutate(uniquePageviews = ifelse(is.na(uniquePageviews), 0, uniquePageviews)) %>% 
+    
+    # We're going to plot both the daily pageviews AND the cumulative total pageviews,
+    # so let's add the cumulative total
+    mutate(cumulative_uniquePageviews = cumsum(uniquePageviews)) %>% 
+    
+    # Grab just the columns we need for our visualization!
+    select(page, days_live, uniquePageviews, cumulative_uniquePageviews)
+}
+
+# We want to run the function above on each page in our data set. So, we need to get a list
+# of those pages. We don't want to include pages with low traffic overall, which we set
+# earlier as the 'total_unique_pageviews_cutoff' value, so let's also filter our
+# list to only include the ones that exceed that cutoff. Alternatively, with a slight
+# adjustment to use `top_n()`, this could also be a spot where you simply select the
+# total number of pages to include in the visualization.
+pages_list <- ga_data %>% 
+  group_by(pagePath) %>% summarise(total_traffic = sum(uniquePageviews)) %>% 
+  top_n(total_pages_included)
+
+# The first little bit of magic can now occur. We'll run our normalize_date_start function on
+# each value in our list of pages and get a data frame back that has our time-normalized
+# traffic by page!
+ga_data_normalized <- map_dfr(pages_list$pagePath, normalize_date_start)
+
+# We specified earlier -- in the `days_live_range` object -- how many "days from launch" we
+# actually want to include, so let's do one final round of filtering to only include those
+# rows.
+ga_data_normalized <- ga_data_normalized %>% filter(days_live <= days_live_range)
+
+# Check out the result of our handiwork
+kable(head(ga_data_normalized))
+
+```
+
+# Data Visualization
+
+We're going to do two visualizations here:
+
+* **Unique Pageviews by Day from Launch** -- typically, this will show a big jump for the first day or two, and then a precipitous dropoff afterwards. If that's not the case, well, good on ya'! That means you're getting sustained value from your content marketing!
+* **Cumulative Unique Pageviews by Day from Launch** -- this will be an easier chart to read, typically, and you can simply look from top to bottom to see which pages have generated the most traffic over time (in the first X days since they launched)
+
+**IMPORTANT:** There may be pages that actually launched before the start of the data pulled. Those pages are going to wind up with the first day in the overall data set treated as their "Day 1," so they likely won't show that initial spike (because it occurred so long ago that it's not included in the data).
+
+Because these will be somewhat messy line charts, we're also going to use the `plotly` package to make them interactive to that the user can mouse over a line and find out exactly what page it is. 
+
+## Plot Unique Pageviews by Day from Launch
+
+This is the visualization that simply plots *uniquePageviews* by day. It can be a little messy to digest (but it can also be eye-opening as to how quickly interest in a particular piece of content drops off).
+
+```{r visualization_1, message=FALSE, warning=FALSE}
+
+# Create the plot
+gg <- ggplot(ga_data_normalized, mapping=aes(x = days_live, y = uniquePageviews, color=page)) +
+  geom_line() +                                          # The main "plot" operation
+  scale_y_continuous(labels=comma) +                     # Include commas in the y-axis numbers
+  labs(title = "Unique Pageviews by Day from Launch",
+       x = "# of Days Since Page Launched",
+       y = "Unique Pageviews") +
+  theme_light() +                                        # Clean up the visualization a bit
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        legend.position = "none",
+        panel.grid.major.y = element_line(color = "gray80"),
+        axis.ticks = element_blank())
+
+# Output the plot. We're wrapping it in ggplotly so we will get some interactivity in the plot.
+ggplotly(gg)
+
+```
+
+## Plot Cumulative Unique Pageviews by Day from Launch
+
+This is the visualization that looks at the _cumulative_ *unique pageviews* for the first X days following the launch (or the first X days of the total evaluation period if the page launched before the start of the evaluation period).
+
+```{r visualization_2, message=FALSE, warning=FALSE}
+
+# Create the plot
+gg <- ggplot(ga_data_normalized, mapping=aes(x = days_live, y = cumulative_uniquePageviews, color=page)) +
+  geom_line() +                                          # The main "plot" operation
+  scale_y_continuous(labels=comma) +                     # Include commas in the y-axis numbers
+  labs(title = "Cumulative Unique Pageviews by Day from Launch",
+       x = "# of Days Since Page Launched",
+       y = "Cumulative Unique Pageviews") +
+  theme_light() +                                        # Clean up the visualization a bit
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        legend.position = "none",
+        panel.grid.major.y = element_line(color = "gray80"),
+        axis.ticks = element_blank())
+
+# Output the plot. We're wrapping it in ggplotly so we will get some interactivity in the plot.
+
+ggplotly(gg)
+
+```
