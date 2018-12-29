@@ -1,0 +1,179 @@
+---
+title: "Google Analytics Page Analysis"
+output: html_notebook
+---
+
+A series of analyses of pages for a site running Google Analytics.
+
+```{r config, warning=FALSE, message=FALSE}
+
+# Load the necessary libraries. 
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(googleAnalyticsR,  # How we actually get the Google Analytics data
+               tidyverse,         # Includes dplyr, ggplot2, and others; very key!
+               plotly,            # For interactive charts
+               scales)            # Useful for some number formatting in the visualizations
+
+# Authorize GA. Depending on if you've done this already and a .ga-httr-oauth file has
+# been saved or not, this may pop you over to a browser to authenticate.
+ga_auth(token = ".httr-oauth")
+
+# Set the view ID and the date range. 
+view_id <- Sys.getenv("GA_VIEW_ID")
+start_date <- Sys.Date() - 31        # 30 days back from yesterday
+end_date <- Sys.Date() - 1           # Yesterday
+
+# Set the number of pages to analyze
+num_pages <- 100
+
+# You likely won't want to do this for the *entire* site. If you do, then simply enter
+# ".*" for this value. Otherwise, enter regEx that filters to the pages of interest (you
+# can experiment/test your regEx by entering it in the Pages report in the web interface
+# for GA).
+filter_regex <- "/blog/.+"
+
+# Set the metrics to use for the x and y dimensions. These will be the "nice label"
+# dimensions. We'll look up if/how they need to be calculated.
+x_dim <- "Entrances"
+y_dim <- "Bounce Rate"
+
+# Set whether the two axes should use a log scale or a standard scale. Set to "log10"
+# to use a log scale and "continuous" to use a (typical) linear scale.
+x_scale <- "log10"
+y_scale <- "linear"
+
+# Create a date frame that we'll use to look up the various calculations for different
+# metrics.
+calcs_df <- data.frame(metric = c("Entrances", "Bounces", "Unique Pageviews", "Pageviews", "Exits", "Bounce Rate", "Exit Rate"),
+                       calculation = c("entrances", "bounces", "uniquePageviews", "pageviews", "exits", "bounces/entrances", "exits/pageviews"),
+                       metric_format = c("integer", "integer", "integer", "integer", "integer", "percentage", "percentage"),
+                       stringsAsFactors = FALSE)
+
+# Grab the format for x and y from the data frame
+x_format <- filter(calcs_df, metric == x_dim) %>% select(metric_format) %>% as.character()
+y_format <- filter(calcs_df, metric == y_dim) %>% select(metric_format) %>% as.character()
+
+# Define the base theme for visualizations
+theme_base <- theme_light() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_line(colour = "gray70"),
+        strip.background = element_rect(fill = "white", color = NA),
+        strip.text = element_text(colour = "gray20", face = "bold"))
+
+```
+
+### Get the Data
+
+Pull the data and do a bit of wrangling of it.
+
+```{r get-and-munge-data, warning=FALSE, message=FALSE}
+
+# Create a dimension filter object. See ?dim_filter() for details. 
+page_filter_object <- dim_filter("pagePath", 
+                                   operator = "REGEXP",
+                                   expressions = filter_regex)
+
+# Now, put that filter object into a filter clause. The "operator" argument is moot -- it 
+# can be AND or OR...but you have to have it be something, even though it doesn't do anything
+# when there is only a single filter object.
+page_filter <- filter_clause_ga4(list(page_filter_object),
+                                          operator = "AND")
+
+# Pull the pages data. We'll go ahead and pull a bunch of metrics so that
+# we won't have to re-pull if we change x_dim and y_dim.
+data_pages <- google_analytics(viewId = view_id,
+                              date_range = c(start_date, end_date),
+                              metrics = c("entrances", "bounces", "pageviews", 
+                                          "uniquePageviews", "exits"),
+                              dimensions = c("deviceCategory", "channelGrouping", "pagePath"),
+                              dim_filters = page_filter,
+                              anti_sample = TRUE)
+
+# Summarize the data using the metrics of interest -- do this overall and then 
+# do this broken out by deviceCategory and Channel.
+
+# Get the formulas
+calc_details_x <- calcs_df %>%  filter(metric == x_dim)
+formula_x <- calc_details_x$calculation
+
+calc_details_y <- calcs_df %>%  filter(metric == y_dim)
+formula_y <- calc_details_y$calculation
+
+# First, we're going to roll everything up (removing deviceCategory and channelGrouping), 
+# and then we're going to calculate our x and y dimensions. This last step requires NSE,
+# which, I realize, has moved on beyond the "_" notation, but I'll be damned if I could get
+# that to work.
+data_overall <- data_pages %>%  group_by(pagePath) %>% 
+  summarise(entrances = sum(entrances), bounces = sum(bounces), pageviews = sum(pageviews),
+            uniquePageviews = sum(uniquePageviews), exits = sum(exits)) %>% 
+  mutate_(x = formula_x,
+          y = formula_y)
+
+# Get the top pages by the x-axis value. We'll use this for our overall plot
+top_pages <- data_overall %>% 
+  arrange(-x) %>% 
+  top_n(num_pages, x) %>% 
+  select(pagePath, x, y)
+
+# Join this back tot he original data and then repeat the calculating. This will give us the
+# top num_pages overall...but broken out by device category and channel
+top_pages_by_devicecat_channel <- top_pages %>% 
+  select(pagePath) %>% 
+  left_join(data_pages) %>% 
+  mutate_(x = formula_x,  y = formula_y) %>% 
+  select(deviceCategory, channelGrouping, pagePath, x, y)
+
+```
+
+# Visualize the Results
+We'll do one visualization of the traffic overall and another visualization that is faceted.
+
+```{r visualize, warning=FALSE, message=FALSE, fig.width=10, fig.height=6}
+
+## Overall visualization of x vs. y
+
+# Set up the x and y scales. These vary based on the settings in the initial chunk
+format_x <- if(x_format == "integer"){comma} else {percent_format(accuracy = 1)}
+format_y <- if(y_format == "integer"){comma} else {percent_format(accuracy = 1)}
+
+scale_x <- if(x_scale == "linear"){
+  scale_x_continuous(labels = format_x)
+} else {
+  scale_x_log10(labels = format_x)
+}
+
+scale_y <- if(y_scale == "linear"){
+  scale_y_continuous(labels = format_x)
+} else {
+  scale_y_log10(labels = format_x)
+}
+
+gg <- ggplot(top_pages, mapping = aes(x = x, y = y, text = pagePath)) +
+  geom_point(colour = "steelblue", alpha = 0.8) +
+  scale_x +
+  scale_y +
+  labs(title = paste("Page Analysis: Top", num_pages, "Pages by Total", x_dim, "-", start_date, "to", end_date),
+       x = x_dim, y = y_dim) +
+  theme_base
+
+ggplotly(gg)
+
+## Same Visualization, but broken down by device category and channel grouping
+
+gg_facets <- ggplot(top_pages_by_devicecat_channel, mapping = aes(x = x, y = y, text = pagePath)) +
+  geom_point(colour = "steelblue", alpha = 0.8) +
+  scale_x +
+  scale_y +
+  labs(title = paste("Page Analysis: Top", num_pages, "Pages by Total", x_dim, "-", start_date, "to", end_date),
+       x = x_dim, y = y_dim) +
+  facet_grid(channelGrouping ~ deviceCategory, switch = "y") +
+  theme_base +
+  theme(panel.border = element_rect(colour = "gray50", fill = NA))
+
+ggplotly(gg_facets)
+
+```
+
+

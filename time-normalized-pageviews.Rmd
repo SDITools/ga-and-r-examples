@@ -38,7 +38,6 @@ end_date <- Sys.Date() - 1            # Yesterday
 # can experiment/test your regEx by entering it in the Pages report in the web interface
 # for GA).
 filter_regex <- "/blog/.+"
-filter_regex <- ".*"
 
 # We're going to have R try to figure out when a page actually launched by finding the
 # first day (in the data that is pulled) where the page had at least X unique pageviews.
@@ -182,7 +181,7 @@ Because these will be somewhat messy line charts, we're also going to use the `p
 
 This is the visualization that simply plots *uniquePageviews* by day. It can be a little messy to digest (but it can also be eye-opening as to how quickly interest in a particular piece of content drops off).
 
-```{r visualization_1, message=FALSE, warning=FALSE}
+```{r visualization_1, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
 
 # Create the plot
 gg <- ggplot(ga_data_normalized, mapping=aes(x = days_live, y = uniquePageviews, color=page)) +
@@ -207,7 +206,7 @@ ggplotly(gg)
 
 This is the visualization that looks at the _cumulative_ *unique pageviews* for the first X days following the launch (or the first X days of the total evaluation period if the page launched before the start of the evaluation period).
 
-```{r visualization_2, message=FALSE, warning=FALSE}
+```{r visualization_2, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
 
 # Create the plot
 gg <- ggplot(ga_data_normalized, mapping=aes(x = days_live, y = cumulative_uniquePageviews, color=page)) +
