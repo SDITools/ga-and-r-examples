@@ -1,19 +1,40 @@
 # Load the necessary libraries. 
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load(shiny,
-               googleAuthR)
+library(shiny)
+library(googleAuthR)
 
 # This needs to be called before googleAnalyticsR is loaded so that googleAnalyticsR
 # will use project specified in the JSON credentials loaded as part of this call
-gar_set_client(scopes = c("https://www.googleapis.com/auth/analytics.readonly"))
+# gar_set_client(web_json = "ga-web-client.json",
+#                scopes = c("https://www.googleapis.com/auth/analytics.readonly"))
+
+# Sys.getenv("GAR_WEB_CLIENTID")
+# Sys.getenv("GAR_WEB_CLIENT_SECRET")
+# 
+# getOption("googleAuthR.client_id")
+# getOption("googleAuthR.client_secret")
+# 
+# options("googleAuthR.scopes.selected" = c("https://www.googleapis.com/auth/urlshortener"))
+
+
+options("googleAuthR.client_id" = Sys.getenv("GAR_CLIENTID"))
+options("googleAuthR.client_secret" = Sys.getenv("GAR_CLIENT_SECRET"))
+options("googleAuthR.webapp.client_id" = Sys.getenv("GAR_WEB_CLIENTID"))
+options("googleAuthR.webapp.client_secret" = Sys.getenv("GAR_WEB_CLIENT_SECRET"))
+options("googleAuthR.scopes.selected" = Sys.getenv("GAR_SCOPES"))
+
+options(googleAuthR.client_id = Sys.getenv("GAR_CLIENTID"),
+        googleAuthR.client_secret = Sys.getenv("GAR_CLIENT_SECRET"),
+        googleAuthR.webapp.client_id = Sys.getenv("GAR_WEB_CLIENTID"),
+        googleAuthR.webapp.client_secret = Sys.getenv("GAR_WEB_CLIENT_SECRET"),
+        googleAuthR.scopes.selected = Sys.getenv("GAR_SCOPES"))
 
 # Load the other libraries we'll use.
-pacman::p_load(googleAnalyticsR,  # How we actually get the Google Analytics data
-               tidyverse,         # Includes dplyr, ggplot2, and others; very key!
-               knitr,             # Nicer looking tables
-               plotly,            # We're going to make the charts interactive
-               DT,                # Interactive tables
-               scales)            # Useful for some number formatting in the visualizations
+library(googleAnalyticsR)  # How we actually get the Google Analytics data
+library(tidyverse)         # Includes dplyr, ggplot2, and others; very key!
+library(knitr)             # Nicer looking tables
+library(plotly)            # We're going to make the charts interactive
+library(DT)                # Interactive tables
+library(scales)            # Useful for some number formatting in the visualizations
 
 ## ui.R
 ui <- fluidPage(title = "Time-Normalized Pageviews",
@@ -124,7 +145,8 @@ server <- function(input, output, session){
                                                        by = "day"),
                                        days_live = seq(min(ga_data_single_page$date):
                                                          max(ga_data_single_page$date)),
-                                       page = page) %>% 
+                                       page = page,
+                                       stringsAsFactors = FALSE) %>% 
         
         # Join back to the original data to get the uniquePageviews
         left_join(ga_data_single_page) %>%

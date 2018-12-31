@@ -124,7 +124,8 @@ normalize_date_start <- function(page){
                                                    by = "day"),
                                    days_live = seq(min(ga_data_single_page$date):
                                                      max(ga_data_single_page$date)),
-                                   page = page) %>% 
+                                   page = page,
+                                   stringsAsFactors = FALSE) %>% 
     
     # Join back to the original data to get the uniquePageviews
     left_join(ga_data_single_page) %>%

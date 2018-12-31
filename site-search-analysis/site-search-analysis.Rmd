@@ -1,0 +1,74 @@
+---
+title: "Google Analytics - Site Search Exploration"
+output: html_notebook
+---
+
+This example assumes that site search tracking is enabled on the site in Google Analytics, and it basically does two things (after doing some cleanup of the text)
+
+* Generates a word cloud
+* Breaks out the searches into "topics" using LDA (https://www.tidytextmining.com/topicmodeling.html)
+
+## Setup/Config
+
+```{r config}
+
+# Load the necessary libraries. 
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(googleAnalyticsR,  # How we actually get the Google Analytics data
+               tidyverse,         # Includes dplyr, ggplot2, and others; very key!
+               knitr,             # Nicer looking tables
+               tidytext,          # Tidy text!
+               SnowballC,         # Mainly for stemming the search terms
+               # tm,                # Text mining
+               wordcloud)         # Useful for some number formatting in the visualizations
+
+# Authorize GA. Depending on if you've done this already and a .ga-httr-oauth file has
+# been saved or not, this may pop you over to a browser to authenticate.
+ga_auth(token = ".httr-oauth")
+
+# Set the view ID and the date range. If you want to, you can swap out the Sys.getenv()
+# call and just replace that with a hardcoded value for the view ID. 
+view_id <- Sys.getenv("GA_VIEW_ID")
+start_date <- Sys.Date() - 120        # The last 30 days
+end_date <- Sys.Date() - 1            # Yesterday
+
+```
+
+## Get the Data and Clean It Up
+
+```{r get_data, message=FALSE, warning=FALSE}
+
+# Pull the data
+ga_data <- google_analytics(viewId = view_id,
+                            date_range = c(start_date, end_date),
+                            metrics = "searchUniques",
+                            dimensions = "searchKeyword",
+                            anti_sample = TRUE)
+
+# Unnest it -- put each word on its own row and then collapse the individual
+# words.
+search_data <- ga_data %>% 
+  unnest_tokens(search_term, searchKeyword) %>% 
+  group_by(search_term) %>% 
+  summarise(searches = sum(searchUniques)) %>% 
+  select(search_term, searches) %>% 
+  ungroup() %>% 
+  arrange(-searches)
+
+# Remove the stop words. stop_words is a data frame that is part of the tidytext
+# package and is a list of English stopwords. If you want another version of stopwords,
+# you'll need to grab them elsewhere, get them in a data frame, and then perform the
+# same anti-join below
+search_data <- search_data %>% 
+  anti_join(stop_words, by = c(search_term = "word"))
+
+# Perform stemming.
+search_data <- search_data %>% 
+  mutate(search_term_stem = wordStem(search_term))
+
+
+
+
+```
+
+
