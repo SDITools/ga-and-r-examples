@@ -10,8 +10,7 @@ library(rsconnect)
 # supporting files exist before deploying. Because this R project has multiple 
 # Shiny apps, and the app file name has to be app.R, each app is in its own directory.
 setwd("time-normalized-pageviews")
-# deployApp(appFiles = c("app.R", "ga-web-client.json", ".httr-oauth"),
-deployApp(appFiles = c("app.R", ".Renviron", ".httr-oauth"),
+deployApp(appFiles = c("app.R", "ga-web-client.json"),
           appName = "time-normalized",
           appTitle = "Google Analytics - Time-Normalized Pageviews")
 setwd("..")

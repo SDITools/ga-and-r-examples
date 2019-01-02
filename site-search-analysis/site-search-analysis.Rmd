@@ -19,8 +19,10 @@ pacman::p_load(googleAnalyticsR,  # How we actually get the Google Analytics dat
                knitr,             # Nicer looking tables
                tidytext,          # Tidy text!
                SnowballC,         # Mainly for stemming the search terms
-               # tm,                # Text mining
-               wordcloud)         # Useful for some number formatting in the visualizations
+               DT,                # Make a nice data table
+               wordcloud,         # Word cloud creation
+               RColorBrewer,      # Get some palettes to use with the word cloud
+               topicmodels)       # For the topic modeling using LDA
 
 # Authorize GA. Depending on if you've done this already and a .ga-httr-oauth file has
 # been saved or not, this may pop you over to a browser to authenticate.
@@ -28,9 +30,15 @@ ga_auth(token = ".httr-oauth")
 
 # Set the view ID and the date range. If you want to, you can swap out the Sys.getenv()
 # call and just replace that with a hardcoded value for the view ID. 
-view_id <- Sys.getenv("GA_VIEW_ID")
-start_date <- Sys.Date() - 120        # The last 30 days
+view_id <- Sys.getenv("GA_VIEW_ID_CFA")
+start_date <- Sys.Date() - 120        # The last 120 days
 end_date <- Sys.Date() - 1            # Yesterday
+
+# Minimum # of searches for a term to include in the wordcloud
+min_frequency <- 2
+
+# Set the number of topics to include in the topic model
+num_topics <- 2
 
 ```
 
@@ -46,7 +54,7 @@ ga_data <- google_analytics(viewId = view_id,
                             anti_sample = TRUE)
 
 # Unnest it -- put each word on its own row and then collapse the individual
-# words.
+# words. This will also make everything lowercase and strip punctuation!
 search_data <- ga_data %>% 
   unnest_tokens(search_term, searchKeyword) %>% 
   group_by(search_term) %>% 
@@ -66,9 +74,120 @@ search_data <- search_data %>%
 search_data <- search_data %>% 
   mutate(search_term_stem = wordStem(search_term))
 
+# Go ahead and find the most popular un-stemmed word for each stemmed word.
+# That will make the results look more "normal" to the casual viewer. We don't want
+# to have any ties, so we're going to somewhat arbitrarily break any ties by adding
+# the row number / 1000000 to each of the search counts first (We'll toss this later)
+search_data_top_term <- search_data %>% 
+  mutate(searches = searches + row_number()/1000000) %>% 
+  group_by(search_term_stem) %>% 
+  top_n(1, searches) %>% 
+  select(-searches)
+
+# Join that back to search data after totalling the searches by the stemmed term.
+search_data <- search_data %>% 
+  group_by(search_term_stem) %>% 
+  summarise(searches = sum(searches)) %>% 
+  left_join(search_data_top_term) %>% 
+  ungroup() %>% 
+  select(search_term_stem, search_term, searches) %>% 
+  arrange(-searches)
+
+# Get rid of the "top term" data frame
+rm(search_data_top_term)
+
+```
+
+## Make a Term-Frequency Matrix
+
+This looks similar to the report in Google Analytics, but it's been processed to be the individual words, stemmed, stopwords removed, etc.
+
+```{r datatable, message=FALSE, warning=FALSE}
+
+select(search_data, search_term, searches) %>% 
+datatable(colnames = c("Search Term", "Searches"),
+          rownames = FALSE)
 
 
 
 ```
 
+
+## Create a Word Cloud
+
+```{r wordcloud, message=FALSE, warning=FALSE}
+
+# Set a seed for reproducibility
+set.seed(1971)
+
+# Set a color palette
+color_palette <- rev(brewer.pal(8,"Spectral")) 
+
+# Generate teh word cloud!
+wordcloud(words = search_data$search_term, 
+          freq = search_data$searches,
+          scale=c(5.5,0.6),
+          min.freq=min_frequency,
+          max.words=500, 
+          random.order=FALSE,
+          rot.per=.0,
+          colors=color_palette)
+
+```
+
+## Look for Topics!
+
+We're going to use Latent Dirichlet allocation (LDA) to try to break out these words into topics. This is basically just following the process outlined for LDA at: https://www.tidytextmining.com/topicmodeling.html.
+
+```{r lda, message=FALSE, warning=FALSE}
+
+# Cast the term frequency matrix into a document term matrix. We're considering this all one 
+# "document" so we're just hardcoding a "1" for that
+search_data_dtm <- search_data %>% 
+  mutate(doc = 1) %>% 
+  cast_dtm(doc, search_term, searches)
+
+# Run LDA. Setting a seed for reproducibility
+search_lda <- LDA(search_data_dtm, k = num_topics, control = list(seed = 1120))
+
+# Assign a probability of each term being in each of the topics
+search_topics <- tidy(search_lda, matrix = "beta")
+
+# For each term, assign it to the topic for which it has the highest beta. This diverges
+# from the approach described at tidytextmining.com, but it seems like a reasonably legit
+# thing to do.
+search_topics_and_terms <- search_topics %>%
+  group_by(term) %>% 
+  top_n(1, beta) %>% 
+  ungroup() %>% 
+  group_by(topic) %>% 
+  top_n(10, beta) %>% 
+  ungroup() %>% 
+  arrange(topic, -beta)
+
+# Find the top 10 terms per topic by beta
+search_top_terms <- search_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+search_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+
+# Find the terms with the greatest spread in beta
+beta_spread <- search_topics %>%
+  mutate(topic = paste0("topic", topic)) %>%
+  spread(topic, beta) %>%
+  filter(topic1 > .001 | topic2 > .001) %>%
+  mutate(log_ratio = log2(topic2 / topic1))
+
+datatable(beta_spread)
+
+
+```
 

@@ -1,35 +1,12 @@
 # Load the necessary libraries. 
 library(shiny)
-library(googleAuthR)
-
-# This needs to be called before googleAnalyticsR is loaded so that googleAnalyticsR
-# will use project specified in the JSON credentials loaded as part of this call
-# gar_set_client(web_json = "ga-web-client.json",
-#                scopes = c("https://www.googleapis.com/auth/analytics.readonly"))
-
-# Sys.getenv("GAR_WEB_CLIENTID")
-# Sys.getenv("GAR_WEB_CLIENT_SECRET")
-# 
-# getOption("googleAuthR.client_id")
-# getOption("googleAuthR.client_secret")
-# 
-# options("googleAuthR.scopes.selected" = c("https://www.googleapis.com/auth/urlshortener"))
-
-
-options("googleAuthR.client_id" = Sys.getenv("GAR_CLIENTID"))
-options("googleAuthR.client_secret" = Sys.getenv("GAR_CLIENT_SECRET"))
-options("googleAuthR.webapp.client_id" = Sys.getenv("GAR_WEB_CLIENTID"))
-options("googleAuthR.webapp.client_secret" = Sys.getenv("GAR_WEB_CLIENT_SECRET"))
-options("googleAuthR.scopes.selected" = Sys.getenv("GAR_SCOPES"))
-
-options(googleAuthR.client_id = Sys.getenv("GAR_CLIENTID"),
-        googleAuthR.client_secret = Sys.getenv("GAR_CLIENT_SECRET"),
-        googleAuthR.webapp.client_id = Sys.getenv("GAR_WEB_CLIENTID"),
-        googleAuthR.webapp.client_secret = Sys.getenv("GAR_WEB_CLIENT_SECRET"),
-        googleAuthR.scopes.selected = Sys.getenv("GAR_SCOPES"))
-
-# Load the other libraries we'll use.
+library(googleAuthR)       # For authentication
 library(googleAnalyticsR)  # How we actually get the Google Analytics data
+
+gar_set_client(web_json = "ga-web-client.json",
+               scopes = "https://www.googleapis.com/auth/analytics.readonly")
+options(googleAuthR.redirect = "https://gilligan.shinyapps.io/time-normalized/")
+
 library(tidyverse)         # Includes dplyr, ggplot2, and others; very key!
 library(knitr)             # Nicer looking tables
 library(plotly)            # We're going to make the charts interactive
@@ -236,4 +213,4 @@ server <- function(input, output, session){
   })
 }
 
-shinyApp(gar_shiny_ui(ui, login_ui = gar_shiny_login_ui), server)
+shinyApp(gar_shiny_ui(ui, login_ui = silent_auth), server)
