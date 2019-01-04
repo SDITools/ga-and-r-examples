@@ -247,22 +247,22 @@ server <- function(input, output, session){
     
     # Set the vline values for the x-axis on both plots
     if(input$x_scale == "Linear" | x_format == "percentage"){
-      x_vline_overall <- max(top_pages$x)/2
-      x_vline_faceted <- max(top_pages_faceted$x)/2
+      x_vline_overall <- max(top_pages$x, na.rm=TRUE)/2
+      x_vline_faceted <- max(top_pages_faceted$x, na.rm=TRUE)/2
     } else {
-      x_vline_overall <- max(top_pages$x) %>% sqrt()
-      x_vline_faceted <- max(top_pages_faceted$x) %>% sqrt()
+      x_vline_overall <- max(top_pages$x, na.rm=TRUE) %>% sqrt()
+      x_vline_faceted <- max(top_pages_faceted$x, na.rm=TRUE) %>% sqrt()
     }
     
     # Set the hline values for the y-axis on both plots
     if(input$y_scale == "Linear" | y_format == "percentage"){
-      y_hline_overall <- max(top_pages$y)/2
-      y_hline_faceted <- max(top_pages_faceted$y)/2
+      y_hline_overall <- max(top_pages$y, na.rm=TRUE)/2
+      y_hline_faceted <- max(top_pages_faceted$y, na.rm=TRUE)/2
     } else {
-      y_hline_overall <- max(top_pages$y) %>% sqrt()
-      y_hline_faceted <- max(top_pages_faceted$y) %>% sqrt()
+      y_hline_overall <- max(top_pages$y, na.rm=TRUE) %>% sqrt()
+      y_hline_faceted <- max(top_pages_faceted$y, na.rm=TRUE) %>% sqrt()
     }
-
+    
     # Pack all of this up into a list to return
     axis_settings <- list(format_x = format_x,
                           format_y = format_y,
