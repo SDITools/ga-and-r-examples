@@ -5,7 +5,7 @@ library(googleAnalyticsR)  # How we actually get the Google Analytics data
 
 gar_set_client(web_json = "ga-web-client.json",
                scopes = "https://www.googleapis.com/auth/analytics.readonly")
-options(googleAuthR.redirect = "https://gilligan.shinyapps.io/time-normalized/")
+options(googleAuthR.redirect = "https://gilligan.shinyapps.io/page-analysis/")
 
 library(tidyverse)         # Includes dplyr, ggplot2, and others; very key!
 library(knitr)             # Nicer looking tables
@@ -130,8 +130,6 @@ server <- function(input, output, session){
                      anti_sample = input$anti_sampling))
   })
   
-  
-  
   # Reactive function to get the formulas used to calculate the x metric
   get_formula_x <- reactive({
     calc_details_x <- calcs_df %>%  filter(metric == input$x_dim)
@@ -143,7 +141,6 @@ server <- function(input, output, session){
     calc_details_y <- calcs_df %>%  filter(metric == input$y_dim)
     formula_y <- calc_details_y$calculation
   })
-  
   
   # Reactive function to get the plottable data. This includes calculating the metrics
   # for x and y dimensions This last step requires NSE,# which, I realize, has moved on beyond 
@@ -177,6 +174,29 @@ server <- function(input, output, session){
       select(pagePath, x, y)
   })
   
+  # Reactive function to get the top pages by the x-axis value, but to keep that data with
+  # the device category and channel grouping breakouts. This will be used for the faceted plot.
+  get_top_pages_faceted <- reactive({
+
+    # Get the overall data
+    data_pages <- get_ga_data()
+    
+    # Get the top pages overall
+    top_pages <- get_top_pages()
+    
+    # Get the formulas
+    formula_x <- get_formula_x()
+    formula_y <- get_formula_y()
+    
+    # Stitch that back to the broken-out (facetable) data
+    top_pages_faceted <- top_pages %>% 
+      select(pagePath) %>% 
+      left_join(data_pages) %>% 
+      mutate_(x = formula_x,  y = formula_y) %>% 
+      select(deviceCategory, channelGrouping, pagePath, x, y)
+  })
+
+  
   # Output the correlation coefficient and R-squared
   output$corr <- renderText({
     
@@ -192,74 +212,66 @@ server <- function(input, output, session){
   })
   
   # We've got to do a lot of fiddling with the scales for both plots, so we're going
-  # to do a lot of little reactive functions.
-  
-  # Get the format for the x-axis
-  get_format_x <- reactive({
+  # to put in a reactive function that figures all of that out and returns a list with
+  # all of the various bits
+  get_axis_settings <- reactive({
     
     # Grab the format for x and y from the data frame
     x_format <- filter(calcs_df, metric == input$x_dim) %>% select(metric_format) %>% as.character()
-    
-    # Set up the x and y scales. These vary based on the settings in the initial chunk
-    format_x <- if(x_format == "integer"){comma} else {percent_format(accuracy = 1)}
-  })
-  
-  # Get the scale for the x-axis
-  get_scale_x <- reactive({
-    if(input$x_scale == "Linear"){
-      scale_x <- scale_x_continuous(labels = get_format_x())
-    } else {
-      scale_x <- scale_x_log10(labels = get_format_x())
-    }
-  })
-  
-  # Get the location of the vline for the x-axis
-  get_x_vline <- reactive({
-    
-    # Grab the top pages
-    top_pages <- get_top_pages()
-    
-    # Locate the vline
-    if(input$x_scale == "Linear"){
-      x_vline <- max(top_pages$x)/2
-    } else {
-      x_vline <- ifelse(x_format == "percentage", max(top_pages$x)/2,
-                        max(top_pages$x) %>% sqrt())
-    }
-  })
-  
-  # Get the format for the y-axis
-  get_format_y <- reactive({
-    
-    # Grab the format for x and y from the data frame
     y_format <- filter(calcs_df, metric == input$y_dim) %>% select(metric_format) %>% as.character()
     
     # Set up the x and y scales. These vary based on the settings in the initial chunk
+    format_x <- if(x_format == "integer"){comma} else {percent_format(accuracy = 1)}
     format_y <- if(y_format == "integer"){comma} else {percent_format(accuracy = 1)}
-  })
-  
-  # Get the scale for the y-axis
-  get_scale_y <- reactive({
-    if(input$y_scale == "Linear"){
-      scale_y <- scale_y_continuous(labels = get_format_y())
-    } else {
-      scale_y <- scale_y_log10(labels = get_format_y())
-    }
-  })
-  
-  # Get the location of the hline for the y-axis
-  get_y_hline <- reactive({
     
-    # Grab the top pages
+    # Get the plot scale (linear or log plus the format) for the axes
+    if(input$x_scale == "Linear"){
+      scale_x <- scale_x_continuous(labels = format_x)
+    } else {
+      scale_x <- scale_x_log10(labels = format_x)
+    }
+    
+    if(input$y_scale == "Linear"){
+      scale_y <- scale_y_continuous(labels = format_y)
+    } else {
+      scale_y <- scale_y_log10(labels = format_y)
+    }
+    
+    # Get the (loose) quadrant divider hline and vline locations. These are in different spots
+    # for the overall and for the faceted version (because the overall is rolled up totals -- which
+    # means larger max #s)
+    
+    # Grab the top pages overall (for overall max/min) and the detailed pages (for the faceted max/min)
     top_pages <- get_top_pages()
+    top_pages_faceted <- get_top_pages_faceted()
     
-    # Locate the hline
-    if(input$y_scale == "Linear"){
-      y_hline <- max(top_pages$y)/2
+    # Set the vline values for the x-axis on both plots
+    if(input$x_scale == "Linear" | x_format == "percentage"){
+      x_vline_overall <- max(top_pages$x)/2
+      x_vline_faceted <- max(top_pages_faceted$x)/2
     } else {
-      y_hline <- ifelse(y_format == "percentage", max(top_pages$y)/2,
-                        max(top_pages$y) %>% sqrt())
+      x_vline_overall <- max(top_pages$x) %>% sqrt()
+      x_vline_faceted <- max(top_pages_faceted$x) %>% sqrt()
     }
+    
+    # Set the hline values for the y-axis on both plots
+    if(input$y_scale == "Linear" | y_format == "percentage"){
+      y_hline_overall <- max(top_pages$y)/2
+      y_hline_faceted <- max(top_pages_faceted$y)/2
+    } else {
+      y_hline_overall <- max(top_pages$y) %>% sqrt()
+      y_hline_faceted <- max(top_pages_faceted$y) %>% sqrt()
+    }
+
+    # Pack all of this up into a list to return
+    axis_settings <- list(format_x = format_x,
+                          format_y = format_y,
+                          scale_x = scale_x,
+                          scale_y = scale_y,
+                          x_vline_overall = x_vline_overall,
+                          x_vline_faceted = x_vline_faceted,
+                          y_hline_overall = y_hline_overall,
+                          y_hline_faceted = y_hline_faceted)
   })
   
   # Output the overall plot (interactively)
@@ -269,20 +281,14 @@ server <- function(input, output, session){
     top_pages <- get_top_pages()
     
     # Get the axis settings
-    format_x <- get_format_x()
-    scale_x <- get_scale_x()
-    x_vline <- get_x_vline()
+    axis_settings <- get_axis_settings()
     
-    format_y <- get_format_y()
-    scale_y <- get_scale_y()
-    y_hline <- get_y_hline()
-    
-    
+    # Build the plot
     gg <- ggplot(top_pages, mapping = aes(x = x, y = y, text = pagePath)) +
-      scale_x +
-      geom_vline(xintercept = x_vline, colour = "gray90") +   # vertical line quadrant divider
-      scale_y +
-      geom_hline(yintercept = y_hline, colour = "gray90") +      # horizontal line quadrant divider
+      axis_settings$scale_x +
+      geom_vline(xintercept = axis_settings$x_vline_overall, colour = "gray90") +   # vertical line quadrant divider
+      axis_settings$scale_y +
+      geom_hline(yintercept = axis_settings$y_hline_overall, colour = "gray90") +   # horizontal line quadrant divider
       geom_point(colour = "steelblue", alpha = 0.8) +
       labs(title = paste0("Page Analysis: Top ", input$num_pages, " Pages by Total ", input$x_dim, ": ", 
                           format(input$date_selection[1]), " to ", format(input$date_selection[2])),
@@ -296,39 +302,17 @@ server <- function(input, output, session){
   # Output the plot broken down by device category and channel grouping
   output$plot_facets <- renderPlotly({
     
-    # Get the top pages
-    top_pages <- get_top_pages()
-    
-    # Get the overall data
-    data_pages <- get_data_overall()
-    
-    # Get the formulas to calculate the metrics
-    formula_x <- get_formula_x()
-    formula_y <- get_formula_y()
-    
-    
-    # Get the top pages (overall) with breakdowns by device category
-    # and channel groupins
-    top_pages_by_devicecat_channel <- top_pages %>% 
-      select(pagePath) %>% 
-      left_join(data_pages) %>% 
-      mutate_(x = formula_x,  y = formula_y) %>% 
-      select(deviceCategory, channelGrouping, pagePath, x, y)
+    # Get the top page - faceteds
+    top_pages_faceted <- get_top_pages_faceted()
     
     # Get the axis settings
-    format_x <- get_format_x()
-    scale_x <- get_scale_x()
-    x_vline <- get_x_vline()
+    axis_settings <- get_axis_settings()
     
-    format_y <- get_format_y()
-    scale_y <- get_scale_y()
-    y_hline <- get_y_hline()
-    
-    gg <- ggplot(top_pages_by_devicecat_channel, mapping = aes(x = x, y = y, text = pagePath)) +
-      scale_x +
-      geom_vline(xintercept = x_vline, colour = "gray90") +   # vertical line quadrant divider
-      scale_y +
-      geom_hline(yintercept = y_hline, colour = "gray90") +      # horizontal line quadrant divider
+    gg <- ggplot(top_pages_faceted, mapping = aes(x = x, y = y, text = pagePath)) +
+      axis_settings$scale_x +
+      geom_vline(xintercept = axis_settings$x_vline_faceted, colour = "gray90") +   # vertical line quadrant divider
+      axis_settings$scale_y +
+      geom_hline(yintercept = axis_settings$y_hline_faceted, colour = "gray90") +   # horizontal line quadrant divider
       geom_point(colour = "steelblue", alpha = 0.8) +
       labs(title = paste0("Page Analysis: Top ", input$num_pages, " Pages by Total ", input$x_dim, ": ", 
                           format(input$date_selection[1]), " to ", format(input$date_selection[2])),

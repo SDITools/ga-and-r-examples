@@ -5,14 +5,23 @@
 
 library(rsconnect)
 
-# Deploy time-normalized page analyzer. It's a bit clunky, in that we seem to need
+# Deploy the apps. It's a bit clunky, in that we seem to need
 # to manually set the working directory to be the directory where the Shiny app and
 # supporting files exist before deploying. Because this R project has multiple 
 # Shiny apps, and the app file name has to be app.R, each app is in its own directory.
+
+# Time-Normalized Pageviews
 setwd("time-normalized-pageviews")
 deployApp(appFiles = c("app.R", "ga-web-client.json"),
           appName = "time-normalized",
           appTitle = "Google Analytics - Time-Normalized Pageviews")
+setwd("..")
+
+# Page Analysis with Two Metrics
+setwd("page-analysis-two-metrics")
+deployApp(appFiles = c("app.R", "ga-web-client.json"),
+          appName = "page-analysis",
+          appTitle = "Google Analytics - Page Analysis with Two Metrics")
 setwd("..")
 
 
