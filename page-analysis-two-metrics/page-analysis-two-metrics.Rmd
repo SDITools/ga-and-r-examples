@@ -121,7 +121,7 @@ top_pages <- data_overall %>%
 r <- cor(top_pages$x, top_pages$y)
 r_squared <- r^2
 
-# Join this back tot he original data and then repeat the calculating. This will give us the
+# Join this back to the original data and then repeat the calculating. This will give us the
 # top num_pages overall...but broken out by device category and channel
 top_pages_by_devicecat_channel <- top_pages %>% 
   select(pagePath) %>% 
@@ -162,8 +162,8 @@ if(y_scale == "linear"){
 
 gg <- ggplot(top_pages, mapping = aes(x = x, y = y, text = pagePath)) +
   scale_x +
+  geom_vline(xintercept = x_vline, colour = "gray90") +   # vertical line quadrant divider
   scale_y +
-  scale_y_continuous(labels = percent_format(accuracy = 1)) +
   geom_hline(yintercept = y_hline, colour = "gray90") +      # horizontal line quadrant divider
   geom_point(colour = "steelblue", alpha = 0.8) +
   labs(title = paste("Page Analysis: Top", num_pages, "Pages by Total", x_dim, "-", start_date, "to", end_date),

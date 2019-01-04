@@ -30,7 +30,7 @@ ga_auth(token = ".httr-oauth")
 
 # Set the view ID and the date range. If you want to, you can swap out the Sys.getenv()
 # call and just replace that with a hardcoded value for the view ID. 
-view_id <- Sys.getenv("GA_VIEW_ID_CFA")
+view_id <- Sys.getenv("GA_VIEW_ID_ACS")
 start_date <- Sys.Date() - 120        # The last 120 days
 end_date <- Sys.Date() - 1            # Yesterday
 
@@ -38,7 +38,7 @@ end_date <- Sys.Date() - 1            # Yesterday
 min_frequency <- 2
 
 # Set the number of topics to include in the topic model
-num_topics <- 2
+num_topics <- 4
 
 ```
 
@@ -70,6 +70,14 @@ search_data <- ga_data %>%
 search_data <- search_data %>% 
   anti_join(stop_words, by = c(search_term = "word"))
 
+# Convert UTF-8 to ASCII (needed because all hell starts to break loose if you 
+# try to text-mine multibyte). So, we're going to try to convert everything to
+# ASCII. For some...this will fail and return NA. So, we'll then just remove
+# the NA rows
+search_data <- search_data %>%
+  mutate(search_term = iconv(search_term, "UTF-8", "ASCII")) %>% 
+  filter(!is.na(search_term))
+
 # Perform stemming.
 search_data <- search_data %>% 
   mutate(search_term_stem = wordStem(search_term))
@@ -91,7 +99,11 @@ search_data <- search_data %>%
   left_join(search_data_top_term) %>% 
   ungroup() %>% 
   select(search_term_stem, search_term, searches) %>% 
+    filter(search_term != "cancer" & search_term_stem !="de") %>%
+
   arrange(-searches)
+
+
 
 # Get rid of the "top term" data frame
 rm(search_data_top_term)
@@ -123,7 +135,7 @@ set.seed(1971)
 # Set a color palette
 color_palette <- rev(brewer.pal(8,"Spectral")) 
 
-# Generate teh word cloud!
+# Generate the word cloud!
 wordcloud(words = search_data$search_term, 
           freq = search_data$searches,
           scale=c(5.5,0.6),
@@ -160,33 +172,32 @@ search_topics_and_terms <- search_topics %>%
   group_by(term) %>% 
   top_n(1, beta) %>% 
   ungroup() %>% 
-  group_by(topic) %>% 
-  top_n(10, beta) %>% 
-  ungroup() %>% 
-  arrange(topic, -beta)
+  arrange(topic, -beta) %>% 
+  left_join(search_data, by = c(term = "search_term"))
 
-# Find the top 10 terms per topic by beta
-search_top_terms <- search_topics %>%
-  group_by(topic) %>%
-  top_n(10, beta) %>%
-  ungroup() %>%
-  arrange(topic, -beta)
 
-search_top_terms %>%
-  mutate(term = reorder(term, beta)) %>%
-  ggplot(aes(term, beta, fill = factor(topic))) +
-  geom_col(show.legend = FALSE) +
-  facet_wrap(~ topic, scales = "free") +
-  coord_flip()
+# Function to generate a word cloud based on the topic ID passed in
+generate_topic_wordcloud <- function(topic_id){
+  
+  # Filter the data to be just the topic and to 
+  # knock out terms with a reallllly low beta
+  topic_data <- search_topics_and_terms %>% 
+    filter(topic == topic_id &
+           beta > 0.001)
+  
+  # Generate the word cloud!
+  wordcloud(words = topic_data$term, 
+            freq = topic_data$searches,
+            scale=c(3.5,1),
+            min.freq=min_frequency,
+            max.words=500, 
+            random.order=FALSE,
+            rot.per=.0,
+            colors=color_palette)
+}
 
-# Find the terms with the greatest spread in beta
-beta_spread <- search_topics %>%
-  mutate(topic = paste0("topic", topic)) %>%
-  spread(topic, beta) %>%
-  filter(topic1 > .001 | topic2 > .001) %>%
-  mutate(log_ratio = log2(topic2 / topic1))
-
-datatable(beta_spread)
+# Call the function for each topic ID
+topic_wordclouds <- map(seq(1:num_topics), generate_topic_wordcloud)
 
 
 ```
