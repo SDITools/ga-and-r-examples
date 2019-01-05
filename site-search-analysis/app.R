@@ -182,12 +182,19 @@ server <- function(input, output, session){
     
     # Convert the list of additional exclusion words to a vector. There may or may not be
     # spaces after the commas separating the terms.
-    exclude_words <- strsplit(input$exclude_words, ",") %>%
-      flatten() %>% as.character() %>% gsub(" ", "", .)
+    # Remove any of the exclusion terms that are entered.
+    if(!is.null(input$exclude_words)){
+      # Take the comma-delimited list of terms and split them out to be a
+      # character vector. The ", ?" regEx is so that this will work with
+      # or without a space following the comma
+      exclude_words <- unlist(strsplit(input$exclude_words,", ?"))
+      
+      # Remove any additional "remove words" specified
+      search_data_clean <-  search_data_clean %>%
+        filter(!search_term %in% exclude_words)
+    }
     
-    # Remove any additional "remove words" specified
-    search_data_clean <-  search_data_clean %>%
-      filter(!search_term_stem %in% exclude_words)
+    
   })
   
   # Output the raw data
@@ -235,6 +242,13 @@ server <- function(input, output, session){
               rot.per = .0,
               colors = color_palette)
   })
+  
+  # This gets a little janky, in that we can't really do recursive / variable
+  # topic counts. So, instead, we're going to have an output for each of FIVE
+  # topics, but then have those return empty results if fewer topics are actually
+  # selected.
+  
+  
 }
 
 # shinyApp(gar_shiny_ui(ui, login_ui = gar_shiny_login_ui), server)
