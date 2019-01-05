@@ -24,4 +24,11 @@ deployApp(appFiles = c("app.R", "ga-web-client.json"),
           appTitle = "Google Analytics - Page Analysis with Two Metrics")
 setwd("..")
 
+# Site Search Analysis
+setwd("site-search-analysis")
+deployApp(appFiles = c("app.R", "ga-web-client.json"),
+          appName = "site-search",
+          appTitle = "Google Analytics - Site Search Analysis")
+setwd("..")
+
 

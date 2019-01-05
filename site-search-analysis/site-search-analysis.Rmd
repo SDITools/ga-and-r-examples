@@ -40,6 +40,13 @@ min_frequency <- 2
 # Set the number of topics to include in the topic model
 num_topics <- 4
 
+# Set the stopwords language
+stopwords_lang <- "en"
+
+# Words to exclude (because they're too dominant to be interesting). This will exclude
+# them from the main word cloud AND from the topic modeling
+exclude_words <- c("cancer", "breast", "de")
+
 ```
 
 ## Get the Data and Clean It Up
@@ -63,10 +70,10 @@ search_data <- ga_data %>%
   ungroup() %>% 
   arrange(-searches)
 
-# Remove the stop words. stop_words is a data frame that is part of the tidytext
-# package and is a list of English stopwords. If you want another version of stopwords,
-# you'll need to grab them elsewhere, get them in a data frame, and then perform the
-# same anti-join below
+# Remove the stop words. 1) get the stopwords, 2) remove 'em
+stop_words <- get_stopwords(language = stopwords_lang) %>% 
+  select(word)
+
 search_data <- search_data %>% 
   anti_join(stop_words, by = c(search_term = "word"))
 
@@ -99,33 +106,57 @@ search_data <- search_data %>%
   left_join(search_data_top_term) %>% 
   ungroup() %>% 
   select(search_term_stem, search_term, searches) %>% 
-    filter(search_term != "cancer" & search_term_stem !="de") %>%
-
   arrange(-searches)
 
-
+# Remove any additional "remove words" specified
+search_data <-  search_data %>%
+  filter(!search_term_stem %in% exclude_words)
 
 # Get rid of the "top term" data frame
 rm(search_data_top_term)
 
 ```
 
+## Show the Original Searches
+
+```{r datatable_raw, message=FALSE, warning=FALSE}
+
+ga_data %>% 
+  arrange(-searchUniques) %>% 
+  datatable(colnames = c("Search Term", "Searches"),  rownames = FALSE)
+
+```
+
+## Show "Question" Searches
+
+Searches that started with a question word: who, what why, when, where, how.
+
+```{r datatable_questions, message=FALSE, warning=FALSE}
+
+ga_data %>% 
+  arrange(-searchUniques) %>% 
+  filter(grepl("^who|^what|^why|^what|^when|^where|^how.*", searchKeyword)) %>% 
+  datatable(colnames = c("Question", "Searches"),  rownames = FALSE)
+
+```
+
+
 ## Make a Term-Frequency Matrix
 
 This looks similar to the report in Google Analytics, but it's been processed to be the individual words, stemmed, stopwords removed, etc.
 
-```{r datatable, message=FALSE, warning=FALSE}
+```{r datatable_clean, message=FALSE, warning=FALSE}
 
 select(search_data, search_term, searches) %>% 
 datatable(colnames = c("Search Term", "Searches"),
           rownames = FALSE)
 
-
-
 ```
 
 
 ## Create a Word Cloud
+
+A wordcloud based on the cleaned up and unnested words.
 
 ```{r wordcloud, message=FALSE, warning=FALSE}
 
