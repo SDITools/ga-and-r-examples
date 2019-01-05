@@ -47,7 +47,7 @@ ui <- fluidPage(title = "Site Search Analysis with Google Analytics",
                                tags$h4("Adjust the Results"),
                                
                                # Stopword language selection. Allows selecting multiple languages
-                               selectInput("stopword_lang",
+                               selectInput("stopwords_lang",
                                            label = "Language(s) for stopwords:",
                                            choices = c("Danish" = "da",
                                                        "English" = "en",
@@ -55,6 +55,7 @@ ui <- fluidPage(title = "Site Search Analysis with Google Analytics",
                                                        "German" = "de",
                                                        "Hungarian" = "hu",
                                                        "Spanish" = "es"),
+                                           multiple = TRUE,
                                            selected = "en"),
                                
                                tags$hr(),
@@ -86,15 +87,17 @@ ui <- fluidPage(title = "Site Search Analysis with Google Analytics",
                   
                   mainPanel(tags$h3("Results"),
                             tabsetPanel(type = "tabs",
-                                        tabPanel("Overall Word Cloud",
-                                                 plotOutput("wordcloud")),
-                                        tabPanel("Topics Word Clouds"),
+                                        tabPanel("Raw Data",
+                                                 dataTableOutput("ga_data")),
                                         tabPanel("Question Searches",
                                                  dataTableOutput("questions")),
                                         tabPanel("Term-Frequency Table",
                                                  dataTableOutput("term_frequency")),
-                                        tabPanel("Raw Data",
-                                                 dataTableOutput("ga_data"))))
+                                        tabPanel("Overall Word Cloud",
+                                                 plotOutput("wordcloud")),
+                                        tabPanel("Topics Word Clouds",
+                                                 plotOutput("topic_1"))
+                            ))
                 )
 )
 
@@ -193,8 +196,35 @@ server <- function(input, output, session){
       search_data_clean <-  search_data_clean %>%
         filter(!search_term %in% exclude_words)
     }
+  })
+  
+  # Reactive function to do the LDA topic modeling
+  get_search_topics_and_terms <- reactive({
     
+    # Get the cleaned up search data
+    search_data_clean <- get_search_data_clean()
     
+    # Cast the term frequency matrix into a document term matrix. We're considering this all one 
+    # "document" so we're just hardcoding a "1" for that
+    search_data_dtm <- search_data_clean %>% 
+      mutate(doc = 1) %>% 
+      cast_dtm(doc, search_term, searches)
+    
+    # Run LDA. Setting a seed for reproducibility
+    search_lda <- LDA(search_data_dtm, k = input$num_topics, control = list(seed = 1120))
+    
+    # Assign a probability of each term being in each of the topics
+    search_topics <- tidy(search_lda, matrix = "beta")
+    
+    # For each term, assign it to the topic for which it has the highest beta. This diverges
+    # from the approach described at tidytextmining.com, but it seems like a reasonably legit
+    # thing to do.
+    search_topics_and_terms <- search_topics %>%
+      group_by(term) %>% 
+      top_n(1, beta) %>% 
+      ungroup() %>% 
+      arrange(topic, -beta) %>% 
+      left_join(search_data_clean, by = c(term = "search_term"))
   })
   
   # Output the raw data
@@ -220,17 +250,17 @@ server <- function(input, output, session){
                 rownames = FALSE)
   })
   
+  # Set a seed for reproducibility
+  set.seed(1971)
+  
+  # Set a color palette
+  color_palette <- rev(brewer.pal(8,"Spectral")) 
+  
   # Output the wordcloud
   output$wordcloud <- renderPlot({
     
-    # Set a seed for reproducibility
-    set.seed(1971)
-    
     # Get the search data
     search_data_clean <- get_search_data_clean()
-    
-    # Set a color palette
-    color_palette <- rev(brewer.pal(8,"Spectral")) 
     
     # Generate the word cloud!
     wordcloud(words = search_data_clean$search_term, 
@@ -248,6 +278,31 @@ server <- function(input, output, session){
   # topics, but then have those return empty results if fewer topics are actually
   # selected.
   
+  # Topic #1
+  output$topic_1 <- renderPlot({
+    
+    # Populate search topics and terms. We'll use this for generating the individual topic
+    # word clouds.
+    search_topics_and_terms <- get_search_topics_and_terms()
+    
+    cat(nrow(search_topics_and_terms), "\n")
+    
+      # Filter the data to be just the topic and to 
+      # knock out terms with a reallllly low beta
+      topic_data <- search_topics_and_terms %>% 
+        filter(topic == 1 &
+                 beta > 0.001)
+      
+      # Generate the word cloud!
+      wordcloud(words = topic_data$term, 
+                freq = topic_data$searches,
+                scale=c(3.5,1),
+                min.freq=input$min_frequency,
+                max.words=500, 
+                random.order=FALSE,
+                rot.per=.0,
+                colors=color_palette)
+  })
   
 }
 
