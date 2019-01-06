@@ -8,6 +8,7 @@ gar_set_client(web_json = "ga-web-client.json",
 options(googleAuthR.redirect = "https://gilligan.shinyapps.io/site-search/")
 
 library(tidyverse)         # Includes dplyr, ggplot2, and others; very key!
+library(gridExtra)         # Grid / side-by-side plot layoutslibrary
 library(knitr)             # Nicer looking tables
 library(DT)                # Interactive tables
 library(tidytext)          # Tidy text!
@@ -19,10 +20,11 @@ library(topicmodels)       # For the topic modeling using LDA
 ## ui.R
 ui <- fluidPage(title = "Site Search Analysis with Google Analytics",
                 tags$h2("Site Search Analysis with Google Analytics"),
-                paste("This requires a site that has site search and has the typical configuration of the",
+                tags$div(paste("This requires a site that has site search and has the typical configuration of the",
                       "capture of search terms with Google Analytics. It's purely based on a search volume",
-                      "analysis. Hat tips to Sebastien Brodeur, Nancy Koons, and Julia Silge for their",
-                      "contributions of the ideas that are used here."),
+                      "analysis. Hat tips to Sébastien Brodeur, Nancy Koons, and Julia Silge for their",
+                      "contributions of the ideas that are used here.")),
+                tags$br(),
                 sidebarLayout(
                   sidebarPanel(tags$h4("Select Base Data Parameters"),
                                # Account/Property/View Selection
@@ -44,7 +46,7 @@ ui <- fluidPage(title = "Site Search Analysis with Google Analytics",
                                                      style="color: #fff; background-color: #337ab7; border-color: #2e6da4")),
                                
                                tags$hr(),
-                               tags$h4("Adjust the Results"),
+                               tags$h4("Refine the Results"),
                                
                                # Stopword language selection. Allows selecting multiple languages
                                selectInput("stopwords_lang",
@@ -58,48 +60,91 @@ ui <- fluidPage(title = "Site Search Analysis with Google Analytics",
                                            multiple = TRUE,
                                            selected = "en"),
                                
-                               tags$hr(),
-                               tags$h4("Wordcloud Settings"),
-                               
                                # Additional words to exclude from the word clouds
                                textInput("exclude_words",
-                                         label = "Additional words to exclude:",
-                                         value = ""),
-                               
-                               # The minimum word frequency to include in the wordcloud
-                               sliderInput("min_frequency",
-                                           label = "Minimum word frequency to include:",
-                                           min = 1,
-                                           max = 50,
-                                           value = 2,
-                                           step = 1),
-                               
-                               tags$hr(),
-                               tags$h4("Topic Modeling"),
-                               
-                               # Number of topics to suss out of the data
-                               sliderInput("num_topics",
-                                           label = "# of topics to find:",
-                                           min = 1,
-                                           max = 5,
-                                           value = 2,
-                                           step = 1)),
+                                         label = paste("Additional words to exclude (from the term-frequency",
+                                                       "table, word cloud, and topic analysis):",
+                                                       value = ""))
+                  ),
                   
-                  mainPanel(tags$h3("Results"),
-                            tabsetPanel(type = "tabs",
+                  mainPanel(tabsetPanel(type = "tabs",
                                         tabPanel("Raw Data",
+                                                 tags$br(),
+                                                 tags$div("This is the raw data returned from Google Analytics. It's what you",
+                                                          "should see if you pull up the standard search terms report in the",
+                                                          "Google Analytics interface."),
+                                                 tags$br(),
                                                  dataTableOutput("ga_data")),
                                         tabPanel("Question Searches",
+                                                 tags$br(),
+                                                 tags$div("These are searches that seemed like straight-up questions (searches",
+                                                          "that started with 'who,' 'what,' 'why,' 'when,' 'where,' or 'how.' Credit",
+                                                          "to Nancy Koons for this tip!"),
+                                                 tags$br(),
                                                  dataTableOutput("questions")),
                                         tabPanel("Term-Frequency Table",
+                                                 tags$br(),
+                                                 tags$div("These are the results after all searches were split into",
+                                                          "individual words, the words were stemmed and combined,",
+                                                          "stopwords were removed, and any additional exclusion words",
+                                                          "were removed. These are the words used to create the word cloud."),
+                                                 tags$br(),
                                                  dataTableOutput("term_frequency")),
                                         tabPanel("Overall Word Cloud",
-                                                 plotOutput("wordcloud")),
+                                                 tags$br(),
+                                                 tags$div("The word cloud based on the cleaned up data set. Credit to Sébastien",
+                                                          "Brodeur for the original idea to do this with search terms!"),
+                                                 tags$br(),
+                                                 fluidRow(
+                                                   # Number of topics to suss out of the data
+                                                   # The minimum word frequency to include in the wordcloud
+                                                   column(4, sliderInput("min_frequency",
+                                                                         label = "Minimum # of searches to include:",
+                                                                         min = 1, max = 50, value = 2, step = 1)),
+                                                   column(4,  sliderInput("overall_min_size",
+                                                                          label = "Minimum word size:",
+                                                                          min = 1,  max = 8, value = 2, step = 0.5)),
+                                                   column(4,  sliderInput("overall_max_size",
+                                                                          label = "Maximum word size:",
+                                                                          min = 1,  max = 8, value = 5.5, step = 0.5))),
+                                                 fluidRow(plotOutput("wordcloud", height = "800px"))),
                                         tabPanel("Topics Word Clouds",
-                                                 plotOutput("topic_1"))
-                            ))
+                                                 tags$br(),
+                                                 tags$div("This is a little bit of unsupervised text mining using Latent Dirichlet",
+                                                          "Allocation (LDA). Based on the number of topics you select below, the LDA",
+                                                          "model establishes a set of topics and then assigns a probability that each",
+                                                          "search term in the data set would appear in that topic. The word clouds",
+                                                          "show the terms that had the highest probability of showing up in each topic",
+                                                          "(and excludes terms that had less than a 0.1% chance of appearing in any topic."),
+                                                 tags$br(),
+                                                 fluidRow(
+                                                   # Number of topics to suss out of the data
+                                                   # column(2, selectInput("num_topics",
+                                                   #                       label = "# of topics to find:",
+                                                   #                       choices = c("2" = 2, "3" = 3, "4" = 4,
+                                                   #                                   "5" = 5, "6" = 6), selected = 2)),
+                                                   column(2, sliderInput("num_topics",
+                                                                         label = "# of topics to find:",
+                                                                         min = 2, max = 6, value = 2, step = 1)),
+                                                   column(3, sliderInput("term_topic_probability",
+                                                                         label = "Strength of term fit:",
+                                                                         min = 0.001,  max = 0.01, value = 0.001, step = 0.001)),
+                                                   column(3, sliderInput("topics_min_frequency",
+                                                                         label = "Minimum # of searches to include:",
+                                                                         min = 1, max = 50, value = 2, step = 1)),
+                                                   column(2, sliderInput("topics_min_size",
+                                                                         label = "Min. word size:",
+                                                                         min = 1,  max = 8, value = 1, step = 0.5)),
+                                                   column(2, sliderInput("topics_max_size",
+                                                                         label = "Max word size:",
+                                                                         min = 1,  max = 8, value = 3.5, step = 0.5))),
+                                                 fluidRow(plotOutput("topic_wordclouds", height = "600px"))
+                                        )
+                  )
+                  )
                 )
 )
+
 
 ## server.R
 server <- function(input, output, session){
@@ -231,7 +276,7 @@ server <- function(input, output, session){
   output$ga_data <- DT::renderDataTable({
     get_ga_data() %>% 
       arrange(-searchUniques) %>% 
-      datatable(colnames = c("Search Term", "Searches"),  rownames = FALSE)
+      datatable(colnames = c("Search Term", "Unique Searches"),  rownames = FALSE)
   })
   
   # Output the questions
@@ -265,7 +310,7 @@ server <- function(input, output, session){
     # Generate the word cloud!
     wordcloud(words = search_data_clean$search_term, 
               freq = search_data_clean$searches,
-              scale = c(5.5,0.6),
+              scale = c(input$overall_max_size, input$overall_min_size),
               min.freq = input$min_frequency,
               max.words = 500, 
               random.order = FALSE,
@@ -276,34 +321,112 @@ server <- function(input, output, session){
   # This gets a little janky, in that we can't really do recursive / variable
   # topic counts. So, instead, we're going to have an output for each of FIVE
   # topics, but then have those return empty results if fewer topics are actually
-  # selected.
+  # selected. There *may* be some inefficiencies here, but I couldn't get anything
+  # moved out of this to avoid the repetition.
   
-  # Topic #1
-  output$topic_1 <- renderPlot({
-    
-    # Populate search topics and terms. We'll use this for generating the individual topic
-    # word clouds.
-    search_topics_and_terms <- get_search_topics_and_terms()
-    
-    cat(nrow(search_topics_and_terms), "\n")
-    
-      # Filter the data to be just the topic and to 
-      # knock out terms with a reallllly low beta
-      topic_data <- search_topics_and_terms %>% 
-        filter(topic == 1 &
-                 beta > 0.001)
-      
-      # Generate the word cloud!
-      wordcloud(words = topic_data$term, 
-                freq = topic_data$searches,
-                scale=c(3.5,1),
-                min.freq=input$min_frequency,
-                max.words=500, 
-                random.order=FALSE,
-                rot.per=.0,
-                colors=color_palette)
+  # Topic #1  
+  wordcloud_1 <- reactive({
+    # Populate search topics and terms. 
+    topic_data <- get_search_topics_and_terms()  %>% 
+      filter(topic == 1 &  beta > input$term_topic_probability)
+    # Generate the word cloud!
+    wordcloud(words = topic_data$term, freq = topic_data$searches,
+              scale=c(input$topics_max_size,input$topics_min_size), 
+              min.freq=input$topics_min_frequency, max.words=500, 
+              random.order=FALSE, rot.per=.0, colors=color_palette)
   })
   
+  # Topic #2
+  wordcloud_2 <- reactive({
+    # Populate search topics and terms. 
+    topic_data <- get_search_topics_and_terms()  %>% 
+      filter(topic == 2 &  beta > input$term_topic_probability)
+    # Generate the word cloud!
+    wordcloud(words = topic_data$term, freq = topic_data$searches,
+              scale=c(input$topics_max_size,input$topics_min_size), 
+              min.freq=input$topics_min_frequency, max.words=500, 
+              random.order=FALSE, rot.per=.0, colors=color_palette)
+  })
+  
+  # For 3-6, the slider might be set below them, so we have to check to see before trying
+  # to generate a word cloud
+  
+  # Topic #3
+  wordcloud_3 <- reactive({
+    if(input$num_topics >= 3){
+      # Populate search topics and terms. 
+      topic_data <- get_search_topics_and_terms()  %>% 
+        filter(topic == 3 &  beta > input$term_topic_probability)
+      # Generate the word cloud!
+      wordcloud(words = topic_data$term, freq = topic_data$searches,
+                scale=c(input$topics_max_size,input$topics_min_size), 
+                min.freq=input$topics_min_frequency, max.words=500, 
+                random.order=FALSE, rot.per=.0, colors=color_palette)
+    } else {
+      NULL
+    }
+  })
+  
+  # Topic #4
+  wordcloud_4 <- reactive({
+    if(input$num_topics >= 4){
+      # Populate search topics and terms. 
+      topic_data <- get_search_topics_and_terms()  %>% 
+        filter(topic == 4 &  beta > input$term_topic_probability)
+      # Generate the word cloud!
+      wordcloud(words = topic_data$term, freq = topic_data$searches,
+                scale=c(input$topics_max_size,input$topics_min_size), 
+                min.freq=input$topics_min_frequency, max.words=500, 
+                random.order=FALSE, rot.per=.0, colors=color_palette)
+    } else {
+      NULL
+    }
+  })
+  
+  # Topic #5
+  wordcloud_5 <- reactive({
+    if(input$num_topics >= 5){
+      # Populate search topics and terms. 
+      topic_data <- get_search_topics_and_terms()  %>% 
+        filter(topic == 5 &  beta > input$term_topic_probability)
+      # Generate the word cloud!
+      wordcloud(words = topic_data$term, freq = topic_data$searches,
+                scale=c(input$topics_max_size,input$topics_min_size), 
+                min.freq=input$topics_min_frequency, max.words=500, 
+                random.order=FALSE, rot.per=.0, colors=color_palette)
+    } else {
+      NULL
+    }
+  })
+  
+  # Topic #6
+  wordcloud_6 <- reactive({
+    if(input$num_topics >= 6){
+      # Populate search topics and terms. 
+      topic_data <- get_search_topics_and_terms()  %>% 
+        filter(topic == 6 &  beta > input$term_topic_probability)
+      # Generate the word cloud!
+      wordcloud(words = topic_data$term, freq = topic_data$searches,
+                scale=c(input$topics_max_size,input$topics_min_size), 
+                min.freq=input$topics_min_frequency, max.words=500, 
+                random.order=FALSE, rot.per=.0, colors=color_palette)
+    } else {
+      NULL
+    }
+  })
+  
+  # Output the grid of wordclouds
+  output$topic_wordclouds <- renderPlot({
+    # Layout out a 2x3 grid with all of the wordclouds and return that as 
+    # the plot.
+    par(mfrow=c(2,3)) # for 1 row, 2 cols
+    wordcloud_1()
+    wordcloud_2()
+    wordcloud_3() 
+    wordcloud_4()
+    wordcloud_5()
+    wordcloud_6()
+  })
 }
 
 # shinyApp(gar_shiny_ui(ui, login_ui = gar_shiny_login_ui), server)
