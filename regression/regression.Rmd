@@ -1,0 +1,313 @@
+---
+title: "Regression -- Quantifying the Impact of Day of Week"
+output: html_notebook
+---
+
+This example is an exploration of using linear regression with categorical/nominal variables. Specifically: with day of week. It will answer two questions:
+
+* **_What % of traffic (although it could be any metric) is explained simply by which day of the week it is?_**
+* **_What is the relative impact of each day of week on the overall traffic._**
+
+This is a bit of an odd way to go about this, in that we would typically perform "time-series decomposition" and then look at the details for a "7-day season." In theory, that would return a pretty similar result. But, it's instructive to walk through a regression to get an understanding on how to perform regression with categorical (aka, nominal) variables, which "day of week" actually is.
+
+_Note that this approach -- unlike a time-series decomposition -- does **not** take into account overall trends in the data, such as a general trend of increasing traffic over time. Again, though, that's okay for shorter-term assessments, and for pedagogical purposes._
+
+The broader application of this approach (and this approach sequences through increasingly complex -- with reason, and not _too_ complex -- ways of performing regression) probably wouldn't be on "traffic," but, rather, would be on some form of conversion, and the model would give the multiplier for each session that had a given set of characteristics (e.g., a mobile visitor from paid search) on whatever that conversion (or other outcome -- such as revenue) would have.
+
+We're only using "day of week" here because sessions is our independent variable, and a session is a session. So, a mobile visitor from paid search contributes one session just like a tablet visitor from organic search -- "characteristics of a session" don't impact "the fact that it's as session." "What day of the week it is," though, is an entirely independent variable, so it works to check the degree to which the day of week impacts the number of sessions.
+
+### Setup/Config
+
+Start by the initial configuration of variables.
+
+```{r config}
+
+# Load the necessary libraries. 
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(googleAnalyticsR,  # How we actually get the Google Analytics data
+               tidyverse,         # Includes dplyr, ggplot2, and others; very key!
+               knitr,             # Nicer looking tables
+               kableExtra,        # Even nicer looking tables
+               plotly,            # We're going to make the charts interactive
+               scales,            # Useful for some number formatting in the visualizations
+               MASS,              # For our stepwise regression
+               caret)             # For k-fold cross-validation
+
+# Authorize GA. Depending on if you've done this already and a .ga-httr-oauth file has
+# been saved or not, this may pop you over to a browser to authenticate.
+ga_auth(token = ".httr-oauth")
+
+# Set the view ID and the date range. If you want to, you can swap out the Sys.getenv()
+# call and just replace that with a hardcoded value for the view ID. 
+view_id <- Sys.getenv("GA_VIEW_ID")
+start_date <- Sys.Date() - 90        # The last 90 days
+end_date <- Sys.Date() - 1           # Yesterday
+
+# Define our theme -- this will be used later for visualizations
+theme_main <- theme_light() +
+  theme(plot.title = element_text(hjust=0.5),
+        legend.title = element_blank(),
+        axis.line.x = element_line(color = "gray20"),
+        axis.title.y = element_blank(),
+        legend.position = "top",
+        panel.border = element_blank(),
+        panel.grid.major.y = element_line(color = "gray80"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+
+```
+
+### Pull the Data
+
+This is a simple data pull. We're just pulling data by day (because each day is a different day of the week) and sessions.
+
+```{r data-pull, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
+
+# Pull the data. See ?google_analytics_4() for additional parameters. The anti_sample = TRUE
+# parameter will slow the query down a smidge and isn't strictly necessary, but it will
+# ensure you do not get sampled data.
+ga_data <- google_analytics(viewId = view_id,
+                            date_range = c(start_date, end_date),
+                            metrics = "sessions",
+                            dimensions = c("date"),
+                            anti_sample = TRUE)
+
+# Show the head of the returned data
+head(ga_data) %>% kable() %>% kable_styling()
+
+```
+
+
+```{r base-data-viz, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
+
+# Go ahead and do a quick visualization of the resulting data
+gg <- ggplot(ga_data, aes(x = date, y = sessions)) + 
+  geom_line(color = "#00a2b1") +
+  scale_y_continuous(expand = c(0,0), limits=c(0, max(ga_data$sessions)*1.05), label = comma) +
+  labs(title = "Sessions by Day",
+       x = "Date") +
+  theme_main
+
+ggplotly(gg)
+
+```
+
+### Data Munging
+
+We need to assign the day of week to each day of traffic and then convert each day of week to a binary -- or "dummy" -- variable. This will make sense as we get into it.
+
+Note that the last step in this munging drops the "Saturday" column entirely. _Any_ day of the week could be excluded. This gets explained by saying, "we only need _k-1_ values," but, to maybe provide a bit more intuition, this really is pointing out that, if there are 7 possible days of the week, then we only need 6 variables to identify each observation (each row of data) by day. In the way this example is set up, we don't need Saturday, because we know that any row that is not Sunday, Monday, Tuesday, Wednesday, Thursday, or Friday _must_ be Saturday.
+
+It doesn't really matter _which_ variable you drop (you can update the code to drop a different day and see that, while the resulting model has different coefficients, it actually returns the exact same results).
+
+```{r munging, message=FALSE, warning=FALSE}
+
+# Get the data set up where each day of the week has its own column. That means one of the 
+# columns will be a "1" and the rest will be "0s" for each date
+ga_data_dummies <- ga_data %>% mutate(weekday = weekdays(date, abbreviate = TRUE)) %>% 
+  mutate(var = 1) %>%                                          # Put a 1 in all reows of a column
+  spread(key = weekday, value = var, fill = 0) %>%             # Create the dummy variables
+  dplyr::select(date, Sun, Mon, Tue, Wed, Thu, Fri, sessions)  # Re-order and drop "Sat"
+
+# Display what the data now looks like
+kable(head(ga_data_dummies)) %>% kable_styling()
+
+# When performing the regression, we don't actually need the date value, so make a data
+# set that has that removed
+analysis_data <- ga_data_dummies %>% dplyr::select(-date)
+
+```
+
+### Conduct a Stepwise Regression on ALL Data
+
+This is the "easy" part. We're just going to run a straight-up regression on all of the data. This has some problems, as there will be a tendency to overfit a model. We'll come back to that in a bit!
+
+This is a "stepwise regression," in that it's going to find the "best" subset of variables for fitting the model -- dropping ones that are not really helping the cause. There are _tons_ of articles and posts explaining the nuts and bolts of this, so Google away! Or, here's one: http://www.sthda.com/english/articles/37-model-selection-essentials-in-r/154-stepwise-regression-essentials-in-r/.
+
+```{r stepwise_all, message=FALSE, warning=FALSE}
+
+# We don't actually want the "date" value, so we're doing to drop that
+
+# Fit the full model 
+full_model <- lm(sessions ~., data = analysis_data)
+
+# Now, see if stepwise can knock some things out (it shouldn't in this case,
+# but it doesn't hurt to try)
+step_model <- stepAIC(full_model, direction = "both", trace = FALSE)
+
+```
+
+### Evaluate the Model
+
+Let's look a summary of the model:
+
+```{r model_summary, message=FALSE, warning=FALSE}
+
+# Get just the overall model summary
+model_summary <- summary(step_model)
+
+# Output that summary
+model_summary
+
+```
+
+This _can_ be a bit confusing to read, so let's try to come up with something that, perhaps, is a bit easier to read.
+
+Start by getting the p-value and the adjusted R-squared for the model overall.
+
+```{r model_stats, message=FALSE, warning=FALSE}
+
+# Get the p-value and the adjusted R-Squared for the model overall
+
+# Get the F-statistic
+f_statistic <- model_summary$fstatistic
+
+# Get the p_value
+p_value <- pf(f_statistic[1], f_statistic[2], f_statistic[3],lower.tail=F)
+attributes(p_value) <- NULL
+
+# Get the adjusted R-squared
+adj_r_sq <- model_summary$adj.r.squared
+
+```
+
+This shows us that the model overall:
+
+* Has a p-value of **`r format(round(p_value,4), nsmall = 4)`**
+* Has an adjusted R^2^ of **`r format(adj_r_sq, digits = 3, nsmall=2)`** (meaning `r format(adj_r_sq*100, digits = 3, nsmall=0)`% of the actual results are explained by the model).
+
+Now, let's dig into the actual individual independent variables and their coefficients. This is just a lightly cleaned up visualization of the "variables list" from the model output above. Note that not all days may appear in this table, as the nature of the stepwise regression is that it will add and subtract different features (variables) trying to find the "best" model.
+
+```{r coefficients, message=FALSE, warning=FALSE}
+
+# Make a data frame with just the coefficients and their significance levels. This is converting
+# the p-values to confidence levels
+ind_vars <- model_summary$coefficients %>% as.data.frame() %>% 
+  mutate(Variable = rownames(.)) %>% 
+  mutate(Significance = ifelse(`Pr(>|t|)` < 0.01, "99%", 
+                               ifelse(`Pr(>|t|)` < 0.05, "95%",
+                                      ifelse(`Pr(>|t|)` < 0.1, "90%", 
+                                             ifelse(`Pr(>|t|)` < 0.2, "80%","<80%"))))) %>% 
+  dplyr::select(Variable, Coefficient = Estimate, Significance)
+
+# Output a table with the independent variables
+kable(ind_vars) %>% kable_styling()
+
+```
+
+It might be helpful to display the above in equation notation -- just to get it mapped back to our days with algebra.
+
+```{r model_equation, message=FALSE, warning=FALSE}
+
+# Generate a string that introduces RMarkdown equation notation so that we have values that
+# can be pasted together and output as RMarkdown. This gets a little screwy, but it's
+# just so we can output a "normal" looking equation.
+model_equation <- ind_vars %>% 
+  mutate(rmd = ifelse(Variable == "(Intercept)", round(Coefficient, 2),
+                      paste0(round(Coefficient, 2), " \\times ", Variable))) 
+
+model_equation <- model_equation$rmd %>%
+  paste(collapse = " + ") %>% 
+  paste0("$$Sessions = ", ., "$$")
+
+```
+
+**`r model_equation`**
+
+But, wait. How do I multiply a number by a _day_?! This gets back to our creation of "dummy variables" earlier. Remember that the data we're working with created a variable for each day of the week and then assigned each row in the table (each day, each "observation") as a `1` (yes, it's that day) or a `0` (no, it's not that day). That means, in the equation above, _most_ of the values will be multipled by `0` for any given day, while one value will be multiplied by `1`.
+
+```{r dummy_vars, message=FALSE, warning=FALSE}
+
+# Re-display what the data looks like with dummy variables
+kable(head(ga_data_dummies)) %>% kable_styling()
+
+```
+
+### Compare the Model Predictions to the Actuals
+
+So, what does our model _look like_ when comparing its predictions to the actual data?
+
+We can simply run the model on the original data set and return a plot that shows the actual vs. predicted values. This is a shortcut to "plotting the residuals" and other checks, but, hopefully, won't give anyone using this too much heartburn.
+
+Here's your chance to check the math from the equation above with some of the actual data in the new data frame we've created.
+
+```{r predict_vs_actual, message=FALSE, warning=FALSE}
+
+# Predict the results using the data -- to get a visualization of the results (basically, 
+# visualizing the residuals). This is just a vector of  predicted sessions.
+predict_vs_actual <- predict(step_model, ga_data_dummies)
+
+# Add those predictions to a data frame that shows the actuals. We'll hold onto
+# this so we can preview it in the output. 
+predict_vs_actual_df <- ga_data_dummies %>% 
+  cbind(data.frame(`Predicted Sessions` = predict_vs_actual)) 
+
+# Rename "Sessions" to "Actual Sessions" for clarity
+names(predict_vs_actual_df) <- gsub("sessions", "Actual Sessions", names(predict_vs_actual_df)) %>% 
+  gsub("Predicted.Sessions", "Predicted Sessions", .)
+
+# Output the head
+kable(head(predict_vs_actual_df)) %>% kable_styling()
+
+```
+
+For reference (if you want to do some math with the above):
+
+**`r model_equation`**
+
+### Plot the Results
+
+Finally, let's plot the results showing three things:
+
+* **The Actual Sessions**
+* **The Predicted Sessions** -- what our regression model (which we determined explains `r round(adj_r_sq, 2)/100`% of the actual results)
+* **The Intercept** -- this is the constant; think of it as the baseline from which each independent variable increases or decreases the prediction
+
+```{r plot_result, message=FALSE, warning=FALSE, fig.width = 10, fig.height=4}
+
+# For cleaner plotting, convert that to a tidy format and then turn it into a ggplot
+predict_vs_actual_for_plot <- predict_vs_actual_df %>% 
+  dplyr::select(Date = date, `Actual Sessions`, `Predicted Sessions`) %>% 
+  gather(key = metric, value = value, -Date)
+
+# Get just the intercept (for a horizontal line we'll add)
+y_intercept <- ind_vars %>% filter(Variable == "(Intercept)") %>% 
+  dplyr::select(Coefficient) %>% as.numeric()
+
+# Get the max value so we can expand the limits
+y_lim <- max(predict_vs_actual_for_plot$value) * 1.1
+
+# Plot the actuals vs. predicted. Ideally, this would show up FIRST, but it comes out second
+gg_predict_vs_actual <- ggplot(data = predict_vs_actual_for_plot,
+                               mapping = aes(x = Date, y = value, color = metric, linetype = metric)) +
+  geom_line(size = 0.5) +
+  geom_hline(aes(yintercept = y_intercept, linetype = "Intercept"), color="#ed1c24") +
+  scale_color_manual(values=c("#00a2b1", "gray50", "#ed1c24")) +
+  scale_linetype_manual(name = "limit", values = c("solid", "dashed", "dotted")) +
+  scale_y_continuous(expand = c(0,0), limits = c(0,y_lim), label=number_format(accuracy=1, big.mark=",")) +
+  labs(x = "Date", y = "Sessions", title = "Sessions by Day: Actual vs. Predicted") +
+  theme_main 
+
+# Output the (interactive) chart
+ggplotly(gg_predict_vs_actual) %>% layout(legend = list(orientation = "h", 
+                                                        x=0.5, xanchor="center",
+                                                        y=1.05, yanchor="top"))
+
+```
+
+So, yes, the **Predicted Sessions** follow a recurring pattern. That's because our categorical variable -- day of week -- only has seven values, so our model is destined to just repeat.
+
+Of course, if there was another variable thrown in (that had significance), this may not be the case, as this recurring pattern would then have some other factor (or set of factors) layered on top of it that added more variability to the prediction.
+
+### A Note on Overfitting
+
+In this example, we had a relatively small number of variables, and we used stepwise regression to pick the subset (which may be "all") that were most predictive of the actual results.
+
+We also did not look at interaction effects, because days of week are quite independent of each other.
+
+Consider if, for instance, we had also used mobile device category and wanted to include the interactions between day of week _and_ device category as a predictor of a result like orders or revenue, then we would have had a _bunch_ more variables (either overtly or behind the scenes). In addition to each day of the week and each device category -- the "main effects," we would have a slew of "interaction effects" to consider as well: `Monday + Mobile`, `Monday + Tablet`, `Monday + Desktop`, `Tuesday + Mobile`, etc.
+
+Conceivably, we would get to a point pretty easily where we had as many variables as we had observations, which causes all sorts of issues! But, even if things did not get that extreme, having many more variables to consider runs a greater risk of "overfitting the model." One way to lessen the risk of this is to use _k_-fold cross validation, which is a mechanism by which the data set is iteratively split into "training" and "testing" groups, and then the different models are run on different sets of training data and then evaluated based on how well they then predict the results in the test data.
+
+We started to include that in this simple model... but, given the (relative) simplicity of this example, we determined it was not sufficiently illustrative to warrant including. 
+

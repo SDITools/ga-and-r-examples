@@ -32,9 +32,10 @@ theme_base <- theme_light() +
 ## ui.R
 ui <- fluidPage(title = "Page Analysis of Two Metrics",
                 tags$h2("Page Analysis of Two Metrics"),
-                paste("Select a Google Analytics view and date range and then pull the data. From there, explore combinations",
+                tags$div(paste("Select a Google Analytics view and date range and then pull the data. From there, explore combinations",
                       "of metrics. Depending on the metrics you choose, the pages of interest will be in specific quadrants as",
-                      "opportunity pages or potential problem pages."),
+                      "opportunity pages or potential problem pages.")),
+                tags$br(),
                 sidebarLayout(
                   sidebarPanel(tags$h4("Select Base Data Parameters"),
                                # Account/Property/View Selection
@@ -49,6 +50,10 @@ ui <- fluidPage(title = "Page Analysis of Two Metrics",
                                textInput("filter_regex",
                                          label = "Enter regEx to filter to the pages of interest:",
                                          value = ".*"),
+                               # Whether or not to enable anti-sampling
+                               checkboxInput("anti_sampling",
+                                             label = "Include anti-sampling (slows down app a bit).",
+                                             value = TRUE),
                                # Action button. We want the user to control when the
                                # underlying call to Google Analytics occurs.
                                tags$div(style="text-align: center",
@@ -77,13 +82,8 @@ ui <- fluidPage(title = "Page Analysis of Two Metrics",
                                            min = 10,
                                            max = 200,
                                            value = 50,
-                                           step = 5),
-                               # Whether or not to enable anti-sampling
-                               checkboxInput("anti_sampling",
-                                             label = "Include anti-sampling (slows down app a bit).",
-                                             value = TRUE)),
-                  mainPanel(tags$h3("Results"),
-                            tabsetPanel(type = "tabs",
+                                           step = 5)),
+                  mainPanel(tabsetPanel(type = "tabs",
                                         tabPanel("Overall",
                                                  tags$h4(textOutput("corr")),
                                                  tags$hr(),
