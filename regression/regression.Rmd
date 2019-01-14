@@ -30,8 +30,7 @@ pacman::p_load(googleAnalyticsR,  # How we actually get the Google Analytics dat
                kableExtra,        # Even nicer looking tables
                plotly,            # We're going to make the charts interactive
                scales,            # Useful for some number formatting in the visualizations
-               MASS,              # For our stepwise regression
-               caret)             # For k-fold cross-validation
+               MASS)              # For our stepwise regression
 
 # Authorize GA. Depending on if you've done this already and a .ga-httr-oauth file has
 # been saved or not, this may pop you over to a browser to authenticate.
@@ -126,8 +125,6 @@ This is a "stepwise regression," in that it's going to find the "best" subset of
 
 ```{r stepwise_all, message=FALSE, warning=FALSE}
 
-# We don't actually want the "date" value, so we're doing to drop that
-
 # Fit the full model 
 full_model <- lm(sessions ~., data = analysis_data)
 
@@ -184,11 +181,11 @@ Now, let's dig into the actual individual independent variables and their coeffi
 # the p-values to confidence levels
 ind_vars <- model_summary$coefficients %>% as.data.frame() %>% 
   mutate(Variable = rownames(.)) %>% 
-  mutate(Significance = ifelse(`Pr(>|t|)` < 0.01, "99%", 
+  mutate(`Confidence Level` = ifelse(`Pr(>|t|)` < 0.01, "99%", 
                                ifelse(`Pr(>|t|)` < 0.05, "95%",
                                       ifelse(`Pr(>|t|)` < 0.1, "90%", 
                                              ifelse(`Pr(>|t|)` < 0.2, "80%","<80%"))))) %>% 
-  dplyr::select(Variable, Coefficient = Estimate, Significance)
+  dplyr::select(Variable, Coefficient = Estimate, `Confidence Level`)
 
 # Output a table with the independent variables
 kable(ind_vars) %>% kable_styling()
