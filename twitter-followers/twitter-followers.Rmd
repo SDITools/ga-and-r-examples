@@ -1,0 +1,242 @@
+---
+title: "Twitter Follower Mining"
+output: html_notebook
+---
+
+This example pulls all of the followers for a given user and then does some text-mining on their descriptions:
+
+* Generates a word cloud
+* Breaks out their descriptions into "topics" using LDA (https://www.tidytextmining.com/topicmodeling.html)
+
+## Setup/Config
+
+```{r config}
+
+# Set the base account
+tw_account <- "analyticshour"
+
+# Load the necessary libraries. 
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(rtweet,            # How we actually get the Twitter data
+               tidyverse,         # Includes dplyr, ggplot2, and others; very key!
+               knitr,             # Nicer looking tables
+               tidytext,          # Tidy text!
+               SnowballC,         # Mainly for stemming the search terms
+               DT,                # Make a nice data table
+               wordcloud,         # Word cloud creation
+               RColorBrewer,      # Get some palettes to use with the word cloud
+               topicmodels)       # For the topic modeling using LDA
+
+
+# Minimum # of occurrences for a term to include in the wordcloud
+min_frequency <- 2
+
+# Set the number of topics to include in the topic model
+num_topics <- 4
+
+# Set the stopwords language
+stopwords_lang <- "en"
+
+# Words to exclude (because they're too dominant to be interesting). This will exclude
+# them from the main word cloud AND from the topic modeling
+exclude_words <- c("cancer", "breast", "de")
+
+# Label for what this is
+main_label <- paste0("Followers of @",tw_account)
+
+# Get app credentials
+
+# Name assigned to created app
+tw_appname <- Sys.getenv("TWITTER_APPNAME")
+
+# Key and Secret
+tw_key <- Sys.getenv("TWITTER_KEY")
+tw_secret <- Sys.getenv("TWITTER_SECRET")
+
+# Create the token
+tw_token <- create_token(
+    app = tw_appname,
+    consumer_key = tw_key,
+    consumer_secret = tw_secret,
+    set_renv = FALSE)
+
+```
+
+## Get the Data and Clean It Up
+
+```{r get_data, message=FALSE, warning=FALSE}
+
+# Get a list of all followers
+user_followers <- get_followers(tw_account, n=75000, token = tw_token)
+
+# # Split that vector up into a list with 15,000 users per (needed to get the details)
+# user_followers_split <- split(user_followers, rep(1:ceiling(nrow(user_followers)/15000), each=15000, 
+#                                                             length.out = nrow(user_followers)))
+
+# Get the user details for all of those users
+followers_details <-  lookup_users(user_followers$user_id, parse = TRUE, token = tw_token)
+
+# Output how many users are being analyzed
+cat(paste0("The following assessment covers the ", nrow(followers_details), " ", tolower(main_label), "."))
+
+# Unnest it -- put each word on its own row and then collapse the individual
+# words. This will also make everything lowercase and strip punctuation!
+followers_data <- followers_details %>% 
+  unnest_tokens(description_term, description) %>% 
+  group_by(description_term) %>% 
+  summarise(occurrences = n()) %>% 
+  select(description_term, occurrences) %>% 
+  ungroup() %>% 
+  arrange(-occurrences)
+
+# Remove the stop words. 1) get the stopwords, 2) remove 'em
+stop_words <- get_stopwords(language = stopwords_lang) %>% 
+  select(word)
+
+followers_data <- followers_data %>% 
+  anti_join(stop_words, by = c(description_term = "word"))
+
+# Convert UTF-8 to ASCII (needed because all hell starts to break loose if you 
+# try to text-mine multibyte). So, we're going to try to convert everything to
+# ASCII. For some...this will fail and return NA. So, we'll then just remove
+# the NA rows
+followers_data <- followers_data %>%
+  mutate(description_term = iconv(description_term, "UTF-8", "ASCII")) %>% 
+  filter(!is.na(description_term))
+
+# Perform stemming.
+followers_data <- followers_data %>% 
+  mutate(description_term_stem = wordStem(description_term))
+
+# Go ahead and find the most popular un-stemmed word for each stemmed word.
+# That will make the results look more "normal" to the casual viewer. We don't want
+# to have any ties, so we're going to somewhat arbitrarily break any ties by adding
+# the row number / 1000000 to each of the search counts first (We'll toss this later)
+followers_data_top_term <- followers_data %>% 
+  mutate(occurrences = occurrences + row_number()/1000000) %>% 
+  group_by(description_term_stem) %>% 
+  top_n(1, occurrences) %>% 
+  select(-occurrences)
+
+# Join that back to search data after totalling the occurrences by the stemmed term.
+followers_data <- followers_data %>% 
+  group_by(description_term_stem) %>% 
+  summarise(occurrences = sum(occurrences)) %>% 
+  left_join(followers_data_top_term) %>% 
+  ungroup() %>% 
+  select(description_term_stem, description_term, occurrences) %>% 
+  arrange(-occurrences)
+
+# Remove any additional "remove words" specified
+followers_data <-  followers_data %>%
+  filter(!description_term_stem %in% exclude_words)
+
+# Get rid of the "top term" data frame
+rm(followers_data_top_term)
+
+```
+
+## Show the Original Descriptions
+
+```{r datatable_raw, message=FALSE, warning=FALSE}
+
+followers_details %>% 
+  arrange(-followers_count) %>% 
+  select(user_id, description, followers_count) %>% 
+  datatable(colnames = c("Username", "Description", "# of Followers"),  rownames = FALSE)
+
+```
+
+
+## Make a Term-Frequency Matrix
+
+This looks similar to the report in Google Analytics, but it's been processed to be the individual words, stemmed, stopwords removed, etc.
+
+```{r datatable_clean, message=FALSE, warning=FALSE}
+
+select(followers_data, description_term, occurrences) %>% 
+datatable(colnames = c("Description Term", "Occurrences"),
+          rownames = FALSE)
+
+```
+
+
+## Create a Word Cloud
+
+A wordcloud based on the cleaned up and unnested words.
+
+```{r wordcloud, message=FALSE, warning=FALSE}
+
+# Set a seed for reproducibility
+set.seed(1971)
+
+# Set a color palette
+color_palette <- rev(brewer.pal(8,"Spectral")) 
+
+# Generate the word cloud!
+wordcloud(words = followers_data$description_term, 
+          freq = followers_data$occurrences,
+          scale=c(5.5,0.6),
+          min.freq=min_frequency,
+          max.words=500, 
+          random.order=FALSE,
+          rot.per=.0,
+          colors=color_palette)
+
+```
+
+## Look for Topics!
+
+We're going to use Latent Dirichlet allocation (LDA) to try to break out these words into topics. This is basically just following the process outlined for LDA at: https://www.tidytextmining.com/topicmodeling.html.
+
+```{r lda, message=FALSE, warning=FALSE}
+
+# Cast the term frequency matrix into a document term matrix. We're considering this all one 
+# "document" so we're just hardcoding a "1" for that
+followers_data_dtm <- followers_data %>% 
+  mutate(doc = 1) %>% 
+  cast_dtm(doc, description_term, occurrences)
+
+# Run LDA. Setting a seed for reproducibility
+search_lda <- LDA(followers_data_dtm, k = num_topics, control = list(seed = 1120))
+
+# Assign a probability of each term being in each of the topics
+search_topics <- tidy(search_lda, matrix = "beta")
+
+# For each term, assign it to the topic for which it has the highest beta. This diverges
+# from the approach described at tidytextmining.com, but it seems like a reasonably legit
+# thing to do.
+search_topics_and_terms <- search_topics %>%
+  group_by(term) %>% 
+  top_n(1, beta) %>% 
+  ungroup() %>% 
+  arrange(topic, -beta) %>% 
+  left_join(followers_data, by = c(term = "description_term"))
+
+
+# Function to generate a word cloud based on the topic ID passed in
+generate_topic_wordcloud <- function(topic_id){
+  
+  # Filter the data to be just the topic and to 
+  # knock out terms with a reallllly low beta
+  topic_data <- search_topics_and_terms %>% 
+    filter(topic == topic_id &
+           beta > 0.001)
+  
+  # Generate the word cloud!
+  wordcloud(words = topic_data$term, 
+            freq = topic_data$occurrences,
+            scale=c(3.5,1),
+            min.freq=min_frequency,
+            max.words=500, 
+            random.order=FALSE,
+            rot.per=.0,
+            colors=color_palette)
+}
+
+# Call the function for each topic ID
+topic_wordclouds <- map(seq(1:num_topics), generate_topic_wordcloud)
+
+
+```
+

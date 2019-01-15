@@ -31,4 +31,11 @@ deployApp(appFiles = c("app.R", "ga-web-client.json"),
           appTitle = "Google Analytics - Site Search Analysis")
 setwd("..")
 
+# Regression
+setwd("regression")
+deployApp(appFiles = c("app.R", "ga-web-client.json"),
+          appName = "regression",
+          appTitle = "Google Analytics - Regression Exploration")
+setwd("..")
+
 
