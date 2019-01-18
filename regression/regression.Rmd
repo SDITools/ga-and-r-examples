@@ -6,15 +6,15 @@ output: html_notebook
 This example is an exploration of using linear regression with categorical/nominal variables. Specifically: with day of week. It will answer two questions:
 
 * **_What % of traffic (although it could be any metric) is explained simply by which day of the week it is?_**
-* **_What is the relative impact of each day of week on the overall traffic._**
+* **_What is the relative impact of each day of week on the overall traffic?_**
 
 This is a bit of an odd way to go about this, in that we would typically perform "time-series decomposition" and then look at the details for a "7-day season." In theory, that would return a pretty similar result. But, it's instructive to walk through a regression to get an understanding on how to perform regression with categorical (aka, nominal) variables, which "day of week" actually is.
 
 _Note that this approach -- unlike a time-series decomposition -- does **not** take into account overall trends in the data, such as a general trend of increasing traffic over time. Again, though, that's okay for shorter-term assessments, and for pedagogical purposes._
 
-The broader application of this approach (and this approach sequences through increasingly complex -- with reason, and not _too_ complex -- ways of performing regression) probably wouldn't be on "traffic," but, rather, would be on some form of conversion, and the model would give the multiplier for each session that had a given set of characteristics (e.g., a mobile visitor from paid search) on whatever that conversion (or other outcome -- such as revenue) would have.
+The broader application of this approach probably wouldn't be on "traffic," but, rather, would be on some form of conversion, and the model would give the multiplier for each session that had a given set of characteristics (e.g., a mobile visitor from paid search) on whatever that conversion (or other outcome -- such as revenue) would have.
 
-We're only using "day of week" here because sessions is our independent variable, and a session is a session. So, a mobile visitor from paid search contributes one session just like a tablet visitor from organic search -- "characteristics of a session" don't impact "the fact that it's as session." "What day of the week it is," though, is an entirely independent variable, so it works to check the degree to which the day of week impacts the number of sessions.
+We're only using "day of week" here because sessions is our independent variable, and a session is a session. So, a mobile visit from paid search contributes one session just like a tablet visit from organic search contributes one session -- "characteristics of a session" don't impact "the fact that it's as session." "What day of the week it is," though, is an entirely independent variable, so it works to check the degree to which the day of week impacts the number of sessions.
 
 ### Setup/Config
 
@@ -58,7 +58,7 @@ theme_main <- theme_light() +
 
 ### Pull the Data
 
-This is a simple data pull. We're just pulling data by day (because each day is a different day of the week) and sessions.
+This is a simple data pull. We're just pulling data by day (because each day is a different day of the week) and sessions. And, since Google Analytics has a "Day of Week Name" dimension, we'll go ahead and pull that, too (although we could have easily calculated this afterwards).
 
 ```{r data-pull, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
 
@@ -68,11 +68,25 @@ This is a simple data pull. We're just pulling data by day (because each day is 
 ga_data <- google_analytics(viewId = view_id,
                             date_range = c(start_date, end_date),
                             metrics = "sessions",
-                            dimensions = c("date"),
+                            dimensions = c("date", "dayOfWeekName"),
                             anti_sample = TRUE)
 
+# Shorten the day of week values and make it a factor with and order for easier plotting later
+# Check the variability of data by weekday
+ga_data <- ga_data %>% 
+  mutate(Weekday = substring(dayOfWeekName, 1, 3)) %>% 
+  mutate(Weekday = toupper(Weekday)) %>% 
+  mutate(Weekday = factor(Weekday,
+                                   levels = c("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"))) %>% 
+  dplyr::select(date, Weekday, sessions)
+
+names(ga_data) <- c("Date", "Weekday", "Sessions")
+
 # Show the head of the returned data
-head(ga_data) %>% kable() %>% kable_styling()
+head(ga_data, 12) %>% kable() %>% kable_styling(full_width = F) %>% 
+  column_spec(1, width = "15em") %>% 
+  column_spec(2, width = "9em") %>% 
+  column_spec(3, width = "9em")
 
 ```
 
@@ -80,9 +94,9 @@ head(ga_data) %>% kable() %>% kable_styling()
 ```{r base-data-viz, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
 
 # Go ahead and do a quick visualization of the resulting data
-gg <- ggplot(ga_data, aes(x = date, y = sessions)) + 
+gg <- ggplot(ga_data, aes(x = Date, y = Sessions)) + 
   geom_line(color = "#00a2b1") +
-  scale_y_continuous(expand = c(0,0), limits=c(0, max(ga_data$sessions)*1.05), label = comma) +
+  scale_y_continuous(expand = c(0,0), limits=c(0, max(ga_data$Sessions)*1.05), label = comma) +
   labs(title = "Sessions by Day",
        x = "Date") +
   theme_main
@@ -91,9 +105,28 @@ ggplotly(gg)
 
 ```
 
+This step is not really necessary to do the regression. It's just useful to realize that, essentially, we're looking at all of the dates, organized by weekday, and the median and variability, as well as how many outliers there are, helps with some intuition for later.
+
+```{r week-data-viz, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
+
+# Make a boxplot where we combine all of the data points for each day of week together
+gg <- ggplot(ga_data, aes(x = Weekday, y = Sessions)) + 
+  geom_boxplot(fill = "#00a2b1", color = "gray80", outlier.colour = "gray60") +
+  scale_y_continuous(expand = c(0,0), limits=c(0, max(ga_data$Sessions)*1.05), label = comma) +
+  labs(title = "Sessions Variation by Day of Week") +
+  theme_main +
+  theme(axis.ticks = element_blank(),
+        axis.title.x = element_blank(),
+        axis.line.x = element_line(colour="gray20"))
+
+gg
+
+```
+
+
 ### Data Munging
 
-We need to assign the day of week to each day of traffic and then convert each day of week to a binary -- or "dummy" -- variable. This will make sense as we get into it.
+We need convert each day of week to a binary -- or "dummy" -- variable. This will make sense as we get into it.
 
 Note that the last step in this munging drops the "Saturday" column entirely. _Any_ day of the week could be excluded. This gets explained by saying, "we only need _k-1_ values," but, to maybe provide a bit more intuition, this really is pointing out that, if there are 7 possible days of the week, then we only need 6 variables to identify each observation (each row of data) by day. In the way this example is set up, we don't need Saturday, because we know that any row that is not Sunday, Monday, Tuesday, Wednesday, Thursday, or Friday _must_ be Saturday.
 
@@ -103,17 +136,20 @@ It doesn't really matter _which_ variable you drop (you can update the code to d
 
 # Get the data set up where each day of the week has its own column. That means one of the 
 # columns will be a "1" and the rest will be "0s" for each date
-ga_data_dummies <- ga_data %>% mutate(weekday = weekdays(date, abbreviate = TRUE)) %>% 
+ga_data_dummies <- ga_data %>% 
   mutate(var = 1) %>%                                          # Put a 1 in all reows of a column
-  spread(key = weekday, value = var, fill = 0) %>%             # Create the dummy variables
-  dplyr::select(date, Sun, Mon, Tue, Wed, Thu, Fri, sessions)  # Re-order and drop "Sat"
+  spread(key = Weekday, value = var, fill = 0) %>%             # Create the dummy variables
+  dplyr::select(Date, SUN, MON, TUE, WED, THU, FRI, Sessions)  # Re-order and drop "SAT"
 
 # Display what the data now looks like
-kable(head(ga_data_dummies)) %>% kable_styling()
+kable(head(ga_data_dummies, 12)) %>% kable_styling(full_width = F) %>% 
+  column_spec(1, width = "8em") %>% 
+  column_spec(2:7, width = "6em") %>% 
+  column_spec(8, width = "8em")
 
 # When performing the regression, we don't actually need the date value, so make a data
 # set that has that removed
-analysis_data <- ga_data_dummies %>% dplyr::select(-date)
+analysis_data <- ga_data_dummies %>% dplyr::select(-Date)
 
 ```
 
@@ -126,7 +162,7 @@ This is a "stepwise regression," in that it's going to find the "best" subset of
 ```{r stepwise_all, message=FALSE, warning=FALSE}
 
 # Fit the full model 
-full_model <- lm(sessions ~., data = analysis_data)
+full_model <- lm(Sessions ~., data = analysis_data)
 
 # Now, see if stepwise can knock some things out (it shouldn't in this case,
 # but it doesn't hurt to try)
@@ -216,7 +252,10 @@ But, wait. How do I multiply a number by a _day_?! This gets back to our creatio
 ```{r dummy_vars, message=FALSE, warning=FALSE}
 
 # Re-display what the data looks like with dummy variables
-kable(head(ga_data_dummies)) %>% kable_styling()
+kable(head(ga_data_dummies, 12)) %>% kable_styling(full_width = F) %>% 
+  column_spec(1, width = "8em") %>% 
+  column_spec(2:7, width = "6em") %>% 
+  column_spec(8, width = "8em")
 
 ```
 
@@ -237,14 +276,18 @@ predict_vs_actual <- predict(step_model, ga_data_dummies)
 # Add those predictions to a data frame that shows the actuals. We'll hold onto
 # this so we can preview it in the output. 
 predict_vs_actual_df <- ga_data_dummies %>% 
-  cbind(data.frame(`Predicted Sessions` = predict_vs_actual)) 
+  cbind(data.frame(`Predicted Sessions` = predict_vs_actual)) %>% 
+  mutate(`Predicted.Sessions` = round(`Predicted.Sessions`))
 
 # Rename "Sessions" to "Actual Sessions" for clarity
-names(predict_vs_actual_df) <- gsub("sessions", "Actual Sessions", names(predict_vs_actual_df)) %>% 
-  gsub("Predicted.Sessions", "Predicted Sessions", .)
+names(predict_vs_actual_df) <- gsub("Sessions", "Actual Sessions", names(predict_vs_actual_df)) %>% 
+  gsub("Predicted.Actual.Sessions", "Predicted Sessions", .)
 
 # Output the head
-kable(head(predict_vs_actual_df)) %>% kable_styling()
+kable(head(predict_vs_actual_df, 12)) %>% kable_styling(full_width = F) %>% 
+  column_spec(1, width = "8em") %>% 
+  column_spec(2:7, width = "6em") %>% 
+  column_spec(8:9, width = "13em")
 
 ```
 
@@ -264,7 +307,7 @@ Finally, let's plot the results showing three things:
 
 # For cleaner plotting, convert that to a tidy format and then turn it into a ggplot
 predict_vs_actual_for_plot <- predict_vs_actual_df %>% 
-  dplyr::select(Date = date, `Actual Sessions`, `Predicted Sessions`) %>% 
+  dplyr::select(Date = Date, `Actual Sessions`, `Predicted Sessions`) %>% 
   gather(key = metric, value = value, -Date)
 
 # Get just the intercept (for a horizontal line we'll add)

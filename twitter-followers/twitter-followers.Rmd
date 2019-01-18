@@ -8,12 +8,14 @@ This example pulls all of the followers for a given user and then does some text
 * Generates a word cloud
 * Breaks out their descriptions into "topics" using LDA (https://www.tidytextmining.com/topicmodeling.html)
 
+This notebook uses `rtweet` for getting the Twitter data. The Shiny version of the app uses `twitteR` due to some limitations of `rtweet` in a Shiny environment.
+
 ## Setup/Config
 
 ```{r config}
 
 # Set the base account
-tw_account <- "analyticshour"
+tw_account <- "garyvee"
 
 # Load the necessary libraries. 
 if (!require("pacman")) install.packages("pacman")
@@ -67,7 +69,7 @@ tw_token <- create_token(
 ```{r get_data, message=FALSE, warning=FALSE}
 
 # Get a list of all followers
-user_followers <- get_followers(tw_account, n=75000, token = tw_token)
+user_followers <- get_followers(tw_account, n=10000, token = tw_token)
 
 # # Split that vector up into a list with 15,000 users per (needed to get the details)
 # user_followers_split <- split(user_followers, rep(1:ceiling(nrow(user_followers)/15000), each=15000, 

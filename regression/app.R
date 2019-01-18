@@ -122,12 +122,17 @@ server <- function(input, output, session){
     # Only pull the data if the "Get Data" button is clicked
     input$query_data
     
-    # Pull the data. 
+    # Pull the data. Go ahead and shorten the weeday names
     isolate(google_analytics(viewId = view_id(),
                              date_range = input$date_selection,
                              metrics = "sessions",
-                             dimensions = "date",
-                             anti_sample = input$anti_sampling))
+                             dimensions = c("date", "dayOfWeekName"),
+                             anti_sample = input$anti_sampling) %>% 
+              mutate(weekday = substring(dayOfWeekName, 1, 3)) %>% 
+              mutate(weekday = toupper(weekday)) %>% 
+              mutate(weekday = factor(weekday,
+                                      levels = c("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"))) %>% 
+              dplyr::select(date, weekday, sessions))
   })
   
   # Reactive function to create the dummy variables
@@ -138,10 +143,10 @@ server <- function(input, output, session){
     
     # Get the data set up where each day of the week has its own column. That means one of the 
     # columns will be a "1" and the rest will be "0s" for each date
-    ga_data_dummies <- ga_data %>% mutate(weekday = weekdays(date, abbreviate = TRUE)) %>% 
+    ga_data_dummies <- ga_data %>% 
       mutate(var = 1) %>%                                          # Put a 1 in all rows of a column
       spread(key = weekday, value = var, fill = 0) %>%             # Create the dummy variables
-      dplyr::select(date, Sun, Mon, Tue, Wed, Thu, Fri, sessions)  # Re-order and drop "Sat"
+      dplyr::select(date, SUN, MON, TUE, WED, THU, FRI, sessions)  # Re-order and drop "Sat"
     
   })
   
@@ -208,7 +213,7 @@ server <- function(input, output, session){
   # Output the base data table
   output$base_data_table <- renderDataTable({
     get_ga_data() %>% 
-      datatable(colnames = c("Date", "Sessions"),  rownames = FALSE)
+      datatable(colnames = c("Date", "Day of Week", "Sessions"),  rownames = FALSE)
   })
   
   # Output the base data plot
@@ -285,8 +290,8 @@ server <- function(input, output, session){
     adj_r_sq <- model_summary$adj.r.squared
     
     result <- paste0("The model has an adjusted R-squared of ", format(adj_r_sq, digits = 3, nsmall=2),
-                     ", which means the model explains ", format(adj_r_sq*100, digits = 3, nsmall=0), 
-                     "% of the actual results.")
+                     ", which means that ", format(adj_r_sq*100, digits = 3, nsmall=0), 
+                     "% of the variation in sessions is explained by the model.")
   })
   
   # Output the equation. See: http://shiny.rstudio.com/gallery/mathjax.html
