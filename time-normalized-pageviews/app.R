@@ -16,9 +16,9 @@ library(scales)            # Useful for some number formatting in the visualizat
 ## ui.R
 ui <- fluidPage(title = "Time-Normalized Pageviews",
                 tags$head(includeScript("gtm.js")),
-                tags$h2("Time-Normalized Pageviews"),
+                tags$h2("Time-Normalized Pageviews*"),
                 sidebarLayout(
-                  sidebarPanel(tags$h3("Select a view:"),
+                  sidebarPanel(tags$h4("Select Base Data Parameters"),
                                # Account/Property/View Selection
                                authDropdownUI("auth_menu",
                                               inColumns = FALSE),
@@ -31,26 +31,39 @@ ui <- fluidPage(title = "Time-Normalized Pageviews",
                                textInput("filter_regex",
                                          label = "Enter regEx to filter to the pages of interest:",
                                          value = ".*"),
-                               # The minimum number of pageviews required for a page to be deemed "live"
-                               numericInput("first_day_pageviews_min",
-                                            label = "Minimum # of pageviews on a given day for the page to be deemed 'launched':",
-                                            value = 5,
-                                            min = 1),
-                               # The number of pages to include in the output
-                               numericInput("total_pages_included",
-                                            label = "Total pages to include in the output:",
-                                            value = 20,
-                                            min = 1),
-                               # The number of "days from launch" to assess
-                               numericInput("days_live_range",
-                                            label = "# of days post-launch to include:",
-                                            value = 30,
-                                            min = 7),
                                # Whether or not to enable anti-sampling
                                checkboxInput("anti_sampling",
                                              label = "Include anti-sampling (slows down app a bit).",
-                                             value = TRUE)),
-                   mainPanel(tags$h3("Results"),
+                                             value = TRUE),
+                               # Action button. We want the user to control when the
+                               # underlying call to Google Analytics occurs.
+                               tags$div(style="text-align: center",
+                                        actionButton("query_data", "Get/Refresh Data!", 
+                                                     style="color: #fff; background-color: #337ab7; border-color: #2e6da4")),
+                               tags$hr(),
+                               tags$h4("Additional Settings"),
+                               # The minimum number of pageviews required for a page to be deemed "live"
+                               sliderInput("first_day_pageviews_min",
+                                           label = "Minimum # of pageviews on a given day for the page to be deemed 'launched':",
+                                           min = 5,
+                                           max = 100,
+                                           value = 10,
+                                           step = 5),
+                               # The number of pages to include in the output
+                               sliderInput("total_pages_included",
+                                           label = "Total pages to include in the output:",
+                                           min = 2,
+                                           max = 50,
+                                           value = 20,
+                                           step = 2),
+                               # The number of "days from launch" to assess
+                               sliderInput("days_live_range",
+                                           label = "# of days post-launch to include:",
+                                           min = 10,
+                                           max = 120,
+                                           value = 30,
+                                           step = 10)),
+                  mainPanel(tags$h3("Results"),
                             tags$hr(),
                             plotlyOutput("upvs_by_day"),
                             tags$hr(),
@@ -86,24 +99,28 @@ server <- function(input, output, session){
   })
   
   # Reactive function to pull the data.
-  ga_data <- reactive({
+  get_ga_data <- reactive({
+    
+    # Only pull the data if the "Get Data" button is clicked
+    input$query_data
+    
     # Pull the data. 
-    google_analytics(viewId = view_id(),
-                     date_range = input$date_selection,
-                     metrics = "uniquePageviews",
-                     dimensions = c("date","pagePath"),
-                     dim_filters = page_filter(),
-                     anti_sample = input$anti_sampling)
+    isolate(google_analytics(viewId = view_id(),
+                             date_range = input$date_selection,
+                             metrics = "uniquePageviews",
+                             dimensions = c("date","pagePath"),
+                             dim_filters = page_filter(),
+                             anti_sample = input$anti_sampling))
   })
   
   # Function to do the data normalization
   ga_data_normalized <- reactive({
     
     # Don't try to normalize anything until there is data to be worked with
-    req(ga_data())
+    get_ga_data()
     
     # Get the data from GA
-    ga_data <- ga_data()
+    ga_data <- get_ga_data()
     
     # Function to filter and then normalize a single page
     normalize_date_start <- function(page){
@@ -145,7 +162,7 @@ server <- function(input, output, session){
         mutate(cumulative_uniquePageviews = cumsum(uniquePageviews)) %>% 
         
         # Grab just the columns we need for our visualization!
-        select(page, days_live, uniquePageviews, cumulative_uniquePageviews)
+        dplyr::select(page, days_live, uniquePageviews, cumulative_uniquePageviews)
     }
     
     # We want to run the function above on each page in our data set. 
