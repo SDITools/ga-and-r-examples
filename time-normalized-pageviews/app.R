@@ -15,6 +15,7 @@ library(scales)            # Useful for some number formatting in the visualizat
 
 ## ui.R
 ui <- fluidPage(title = "Time-Normalized Pageviews",
+                tags$head(includeScript("gtm.js")),
                 tags$h2("Time-Normalized Pageviews"),
                 sidebarLayout(
                   sidebarPanel(tags$h3("Select a view:"),
@@ -53,8 +54,15 @@ ui <- fluidPage(title = "Time-Normalized Pageviews",
                             tags$hr(),
                             plotlyOutput("upvs_by_day"),
                             tags$hr(),
-                            plotlyOutput("upvs_by_day_cum"))
-                ))
+                            plotlyOutput("upvs_by_day_cum"))),
+                tags$hr(),
+                tags$div("*This app is part of a larger set of apps that demonstrate some uses of R in conjunction",
+                         "with Google Analytics (and Twitter). For the code for this app, as well as an R Notebook",
+                         "that includes more details, see:", tags$a(href = "https://github.com/SDITools/ga-and-r-examples/",
+                                                                    "https://github.com/SDITools/ga-and-r-examples/"),"."),
+                tags$br()
+)
+
 
 ## server.R
 server <- function(input, output, session){

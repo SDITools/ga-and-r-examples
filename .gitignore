@@ -24,8 +24,18 @@
 
 rsconnect/
 .Rproj.user
-.ga-httr-oauth
+
+**/.httr-oauth
 **/ga-web-client.json
+
+# Exclude GTM container includes
+**/gtm.js
+
+# Exclude RNotebooks that are built from the .Rmd files
 **/*.nb.html
-**.Renviron
+
+# Exclude the .Renviorn
+**/.Renviron
+
+# I'm not even sure what this is...but seems like it should be excluded
 .DS_Store

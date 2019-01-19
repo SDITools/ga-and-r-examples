@@ -12,30 +12,34 @@ library(rsconnect)
 
 # Time-Normalized Pageviews
 setwd("time-normalized-pageviews")
-deployApp(appFiles = c("app.R", "ga-web-client.json"),
+deployApp(appFiles = c("app.R", "ga-web-client.json", "gtm.js"),
           appName = "time-normalized",
-          appTitle = "Google Analytics - Time-Normalized Pageviews")
+          appTitle = "Google Analytics - Time-Normalized Pageviews",
+          forceUpdate = TRUE)
 setwd("..")
 
 # Page Analysis with Two Metrics
 setwd("page-analysis-two-metrics")
-deployApp(appFiles = c("app.R", "ga-web-client.json"),
+deployApp(appFiles = c("app.R", "ga-web-client.json", "gtm.js"),
           appName = "page-analysis",
-          appTitle = "Google Analytics - Page Analysis with Two Metrics")
+          appTitle = "Google Analytics - Page Analysis with Two Metrics",
+          forceUpdate = TRUE)
 setwd("..")
 
 # Site Search Analysis
 setwd("site-search-analysis")
-deployApp(appFiles = c("app.R", "ga-web-client.json"),
+deployApp(appFiles = c("app.R", "ga-web-client.json", "gtm.js"),
           appName = "site-search",
-          appTitle = "Google Analytics - Site Search Analysis")
+          appTitle = "Google Analytics - Site Search Analysis",
+          forceUpdate = TRUE)
 setwd("..")
 
 # Regression
 setwd("regression")
-deployApp(appFiles = c("app.R", "ga-web-client.json"),
+deployApp(appFiles = c("app.R", "ga-web-client.json", "gtm.js"),
           appName = "regression",
-          appTitle = "Google Analytics - Regression Exploration")
+          appTitle = "Google Analytics - Regression Exploration",
+          forceUpdate = TRUE)
 setwd("..")
 
 

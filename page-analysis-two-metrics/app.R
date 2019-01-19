@@ -31,7 +31,8 @@ theme_base <- theme_light() +
 
 ## ui.R
 ui <- fluidPage(title = "Page Analysis of Two Metrics",
-                tags$h2("Page Analysis of Two Metrics"),
+                tags$head(includeScript("gtm.js")),
+                tags$h2("Page Analysis of Two Metrics*"),
                 tags$div(paste("Select a Google Analytics view and date range and then pull the data. From there, explore combinations",
                       "of metrics. Depending on the metrics you choose, the pages of interest will be in specific quadrants as",
                       "opportunity pages or potential problem pages.")),
@@ -85,13 +86,21 @@ ui <- fluidPage(title = "Page Analysis of Two Metrics",
                                            step = 5)),
                   mainPanel(tabsetPanel(type = "tabs",
                                         tabPanel("Overall",
+                                                 tags$br(),
                                                  tags$h4(textOutput("corr")),
                                                  tags$hr(),
                                                  plotlyOutput("plot_overall", height = "800px")),
                                         tabPanel("Channel Grouping and Device Category",
                                                  plotlyOutput("plot_facets", height = "800px")))
                   )
-                ))
+                ),
+                tags$hr(),
+                tags$div("*This app is part of a larger set of apps that demonstrate some uses of R in conjunction",
+                         "with Google Analytics (and Twitter). For the code for this app, as well as an R Notebook",
+                         "that includes more details, see:", tags$a(href = "https://github.com/SDITools/ga-and-r-examples/",
+                         "https://github.com/SDITools/ga-and-r-examples/"),"."),
+                tags$br()
+                )
 
 ## server.R
 server <- function(input, output, session){
@@ -171,7 +180,7 @@ server <- function(input, output, session){
     top_pages <- data_overall %>% 
       arrange(-x) %>% 
       top_n(input$num_pages, x) %>% 
-      select(pagePath, x, y)
+      dplyr::select(pagePath, x, y)
   })
   
   # Reactive function to get the top pages by the x-axis value, but to keep that data with
@@ -190,10 +199,10 @@ server <- function(input, output, session){
     
     # Stitch that back to the broken-out (facetable) data
     top_pages_faceted <- top_pages %>% 
-      select(pagePath) %>% 
+      dplyr::select(pagePath) %>% 
       left_join(data_pages) %>% 
       mutate_(x = formula_x,  y = formula_y) %>% 
-      select(deviceCategory, channelGrouping, pagePath, x, y)
+      dplyr::select(deviceCategory, channelGrouping, pagePath, x, y)
   })
 
   
@@ -217,8 +226,8 @@ server <- function(input, output, session){
   get_axis_settings <- reactive({
     
     # Grab the format for x and y from the data frame
-    x_format <- filter(calcs_df, metric == input$x_dim) %>% select(metric_format) %>% as.character()
-    y_format <- filter(calcs_df, metric == input$y_dim) %>% select(metric_format) %>% as.character()
+    x_format <- filter(calcs_df, metric == input$x_dim) %>% dplyr::select(metric_format) %>% as.character()
+    y_format <- filter(calcs_df, metric == input$y_dim) %>% dplyr::select(metric_format) %>% as.character()
     
     # Set up the x and y scales. These vary based on the settings in the initial chunk
     format_x <- if(x_format == "integer"){comma} else {percent_format(accuracy = 1)}

@@ -19,11 +19,12 @@ library(topicmodels)       # For the topic modeling using LDA
 
 ## ui.R
 ui <- fluidPage(title = "Site Search Analysis with Google Analytics",
+                tags$head(includeScript("gtm.js")),
                 tags$h2("Site Search Analysis with Google Analytics"),
                 tags$div(paste("This requires a site that has site search and has the typical configuration of the",
-                      "capture of search terms with Google Analytics. It's purely based on a search volume",
-                      "analysis. Hat tips to Sébastien Brodeur, Nancy Koons, and Julia Silge for their",
-                      "contributions of the ideas that are used here.")),
+                               "capture of search terms with Google Analytics. It's purely based on a search volume",
+                               "analysis. Hat tips to Sébastien Brodeur, Nancy Koons, and Julia Silge for their",
+                               "contributions of the ideas that are used here.")),
                 tags$br(),
                 sidebarLayout(
                   sidebarPanel(tags$h4("Select Base Data Parameters"),
@@ -139,11 +140,15 @@ ui <- fluidPage(title = "Site Search Analysis with Google Analytics",
                                                                          label = "Max word size:",
                                                                          min = 1,  max = 8, value = 3.5, step = 0.5))),
                                                  fluidRow(plotOutput("topic_wordclouds", height = "600px"))
-                                        )
-                  )
-                  )
-                )
+                                        )))),
+                tags$hr(),
+                tags$div("*This app is part of a larger set of apps that demonstrate some uses of R in conjunction",
+                         "with Google Analytics (and Twitter). For the code for this app, as well as an R Notebook",
+                         "that includes more details, see:", tags$a(href = "https://github.com/SDITools/ga-and-r-examples/",
+                                                                    "https://github.com/SDITools/ga-and-r-examples/"),"."),
+                tags$br()
 )
+
 
 
 ## server.R

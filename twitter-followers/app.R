@@ -14,6 +14,7 @@ library(topicmodels)       # For the topic modeling using LDA
 
 ## ui.R
 ui <- fluidPage(title = "Twitter Follower Analysis",
+                tags$head(includeScript("gtm.js")),
                 tags$h2("Twitter Follower Analysis"),
                 tags$div("Enter a username and then text mine their followers' descriptions!"),
                 tags$br(),
@@ -108,8 +109,13 @@ ui <- fluidPage(title = "Twitter Follower Analysis",
                                                                          label = "Max word size:",
                                                                          min = 1,  max = 8, value = 3.5, step = 0.5))),
                                                  fluidRow(plotOutput("topic_wordclouds", height = "600px"))
-                                        )
-                  )))
+                                        )))),
+                tags$hr(),
+                tags$div("*This app is part of a larger set of apps that demonstrate some uses of R in conjunction",
+                         "with Google Analytics (and Twitter). For the code for this app, as well as an R Notebook",
+                         "that includes more details, see:", tags$a(href = "https://github.com/SDITools/ga-and-r-examples/",
+                                                                    "https://github.com/SDITools/ga-and-r-examples/"),"."),
+                tags$br()
 )
 
 
