@@ -3,6 +3,14 @@ title: "Regression -- Quantifying the Impact of Day of Week"
 output: html_notebook
 ---
 
+### General Note
+This example is part of a larger set of examples of using Google Analytics with R:
+
+* For additional examples, downloadable code, and explanations of the overall effort, see: https://github.com/SDITools/ga-and-r-examples
+* To see this specific example in Shiny (web/interactive) form, see: https://gilligan.shinyapps.io/regression/
+
+### Overview
+
 This example is an exploration of using linear regression with categorical/nominal variables. Specifically: with day of week. It will answer two questions:
 
 * **_What % of traffic (although it could be any metric) is explained simply by which day of the week it is?_**
@@ -310,30 +318,40 @@ Finally, let's plot the results showing three things:
 
 ```{r plot_result, message=FALSE, warning=FALSE, fig.width = 10, fig.height=6}
 
-# For cleaner plotting, convert that to a tidy format and then turn it into a ggplot
-predict_vs_actual_for_plot <- predict_vs_actual_df %>% 
-  dplyr::select(Date = Date, `Actual Sessions`, `Predicted Sessions`) %>% 
-  gather(key = metric, value = value, -Date)
-
 # Get just the intercept (for a horizontal line we'll add)
 y_intercept <- ind_vars %>% filter(Variable == "(Intercept)") %>% 
   dplyr::select(Coefficient) %>% as.numeric()
 
+# Add that y-intercept as a constant to the data to be plotted. geom_hline()
+# would be better for this, but I gave up fighting to get the legend I was
+# wanting, so hacking around it this way
+predict_vs_actual_for_plot <- predict_vs_actual_df %>% 
+  mutate(Intercept = y_intercept)
+
+# For cleaner plotting, convert that to a tidy format and then turn it into a ggplot
+predict_vs_actual_for_plot <- predict_vs_actual_for_plot %>% 
+  dplyr::select(Date = Date, `Actual Sessions`, `Predicted Sessions`, Intercept) %>% 
+  gather(key = metric, value = value, -Date) %>% 
+  # Total hack to add better spacing in the legend
+  mutate(metric = paste0(metric, "    "))
+
 # Get the max value so we can expand the limits
 y_lim <- max(predict_vs_actual_for_plot$value) * 1.1
 
-# Plot the actuals vs. predicted. Ideally, this would show up FIRST, but it comes out second
+# Plot the actuals vs. predicted. 
 gg_predict_vs_actual <- ggplot() +
   geom_line(data = predict_vs_actual_for_plot,
             mapping = aes(x = Date, y = value, color = metric, 
                           linetype = metric), size = 0.8) +
-  geom_hline(mapping = aes(linetype = "Intercept", yintercept = y_intercept), 
-             color="#ed1c24") +
-  scale_color_manual(values=c("#00a2b1", "gray30", "#ed1c24")) +
-  scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
+  # geom_hline(mapping = aes(linetype = "Intercept", yintercept = y_intercept), 
+  #            color="#ed1c24") +
+  scale_color_manual(values=c("#00a2b1", "#ed1c24", "gray30" )) +
+  scale_linetype_manual(values = c("solid", "dashed", "dotted" )) +
   scale_y_continuous(expand = c(0,0), limits = c(0,y_lim), label=number_format(accuracy=1, big.mark=",")) +
   labs(x = "Date", y = "Sessions", title = "Sessions by Day: Actual vs. Predicted") +
-  theme_main 
+  # guides(fill=guide_legend(keywidth=0.8, keyheight=0.1, default.unit="inch")) +
+  theme_main +
+  theme(legend.key.width=unit(2,"line"))
 
 # Output the chart
 gg_predict_vs_actual 

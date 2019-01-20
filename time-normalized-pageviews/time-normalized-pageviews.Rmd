@@ -3,6 +3,14 @@ title: "Time-Normalized Pageviews"
 output: html_notebook
 ---
 
+### General Note
+This example is part of a larger set of examples of using Google Analytics with R:
+
+* For additional examples, downloadable code, and explanations of the overall effort, see: https://github.com/SDITools/ga-and-r-examples
+* To see this specific example in Shiny (web/interactive) form, see: https://gilligan.shinyapps.io/time-normalized/
+
+### Overview
+
 This example is lifted straight from http://www.dartistics.com/googleanalytics/int-time-normalized.html, likely in incredibly poor form. But, it needed just enough tweaking that it seemed worth putting a slightly different version here.
 
 **Note: You need to follow the instructions on this page -- http://www.dartistics.com/googleanalytics/setup.html -- before proceeding in order for this code to work.**
@@ -20,6 +28,7 @@ if (!require("pacman")) install.packages("pacman")
 pacman::p_load(googleAnalyticsR,  # How we actually get the Google Analytics data
                tidyverse,         # Includes dplyr, ggplot2, and others; very key!
                knitr,             # Nicer looking tables
+               kableExtra,        # Still nicer looking tables!
                plotly,            # We're going to make the charts interactive
                scales)            # Useful for some number formatting in the visualizations
 
@@ -82,7 +91,7 @@ ga_data <- google_analytics(viewId = view_id,
 
 # Go ahead and do a quick inspection of the data that was returned. This isn't required,
 # but it's a good check along the way.
-kable(head(ga_data))
+kable(head(ga_data)) %>% kable_styling()
 ```
 
 # Data Munging
@@ -139,7 +148,7 @@ normalize_date_start <- function(page){
     mutate(cumulative_uniquePageviews = cumsum(uniquePageviews)) %>% 
     
     # Grab just the columns we need for our visualization!
-    select(page, days_live, uniquePageviews, cumulative_uniquePageviews)
+    dplyr::select(page, days_live, uniquePageviews, cumulative_uniquePageviews)
 }
 
 # We want to run the function above on each page in our data set. So, we need to get a list
@@ -163,7 +172,7 @@ ga_data_normalized <- map_dfr(pages_list$pagePath, normalize_date_start)
 ga_data_normalized <- ga_data_normalized %>% filter(days_live <= days_live_range)
 
 # Check out the result of our handiwork
-kable(head(ga_data_normalized))
+kable(head(ga_data_normalized)) %>% kable_styling()
 
 ```
 
@@ -182,7 +191,7 @@ Because these will be somewhat messy line charts, we're also going to use the `p
 
 This is the visualization that simply plots *uniquePageviews* by day. It can be a little messy to digest (but it can also be eye-opening as to how quickly interest in a particular piece of content drops off).
 
-```{r visualization_1, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+```{r visualization_1, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
 
 # Create the plot
 gg <- ggplot(ga_data_normalized, mapping=aes(x = days_live, y = uniquePageviews, color=page)) +
@@ -207,7 +216,7 @@ ggplotly(gg)
 
 This is the visualization that looks at the _cumulative_ *unique pageviews* for the first X days following the launch (or the first X days of the total evaluation period if the page launched before the start of the evaluation period).
 
-```{r visualization_2, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+```{r visualization_2, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
 
 # Create the plot
 gg <- ggplot(ga_data_normalized, mapping=aes(x = days_live, y = cumulative_uniquePageviews, color=page)) +

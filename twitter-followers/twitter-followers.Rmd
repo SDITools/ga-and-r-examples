@@ -1,21 +1,26 @@
 ---
 title: "Twitter Follower Mining"
-output: html_notebook
+output: html_document
 ---
+
+### General Note
+
+This example is part of a larger set of examples of using Google Analytics with R...even though this example uses Twitter. For additional examples, downloadable code, and explanations of the overall effort, see: https://github.com/SDITools/ga-and-r-examples.
+### Overview
+
 
 This example pulls all of the followers for a given user and then does some text-mining on their descriptions:
 
-* Generates a word cloud
-* Breaks out their descriptions into "topics" using LDA (https://www.tidytextmining.com/topicmodeling.html)
-
-This notebook uses `rtweet` for getting the Twitter data. The Shiny version of the app uses `twitteR` due to some limitations of `rtweet` in a Shiny environment.
+* Cleans up the descriptions by unnesting terms, removing stopwords, pushing everything to lowercase, and performing stemming
+* Generates a term-frequency matrix and a word cloud
+* Breaks out the searches into "topics" using LDA (https://www.tidytextmining.com/topicmodeling.html)
 
 ## Setup/Config
 
 ```{r config}
 
 # Set the base account
-tw_account <- "garyvee"
+tw_account <- "analyticshour"
 
 # Load the necessary libraries. 
 if (!require("pacman")) install.packages("pacman")
@@ -41,26 +46,31 @@ stopwords_lang <- "en"
 
 # Words to exclude (because they're too dominant to be interesting). This will exclude
 # them from the main word cloud AND from the topic modeling
-exclude_words <- c("cancer", "breast", "de")
+exclude_words <- c("https")
 
 # Label for what this is
 main_label <- paste0("Followers of @",tw_account)
 
 # Get app credentials
 
-# Name assigned to created app
+# Name assigned to created app. You'll need to set these up in the Twitter
+# developer console and then either hardcode them here or put them in your .Renviron file
 tw_appname <- Sys.getenv("TWITTER_APPNAME")
 
 # Key and Secret
 tw_key <- Sys.getenv("TWITTER_KEY")
 tw_secret <- Sys.getenv("TWITTER_SECRET")
+tw_access_token = Sys.getenv("TWITTER_ACCESS_TOKEN")
+tw_access_secret = Sys.getenv("TWITTER_ACCESS_SECRET")
 
-# Create the token
+
+# Create the token. 
 tw_token <- create_token(
     app = tw_appname,
     consumer_key = tw_key,
     consumer_secret = tw_secret,
-    set_renv = FALSE)
+    access_token = tw_access_token,
+    access_secret = tw_access_secret)
 
 ```
 

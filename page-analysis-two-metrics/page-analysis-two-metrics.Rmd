@@ -1,9 +1,17 @@
 ---
-title: "Google Analytics Page Analysis"
+title: "Google Analytics Page Analysis (2-Metric Comparison)"
 output: html_notebook
 ---
 
-Comparing two metrics at a page-by-page level across two metrics to identify high/low performers.
+### General Note
+This example is part of a larger set of examples of using Google Analytics with R:
+
+* For additional examples, downloadable code, and explanations of the overall effort, see: https://github.com/SDITools/ga-and-r-examples
+* To see this specific example in Shiny (web/interactive) form, see: https://gilligan.shinyapps.io/page-analysis/
+
+### Overview
+
+This example compares two metrics at a page-by-page level to identify high/low performers. This is set to pull *Entrances* and *Bounce Rate* and compare them, but additional data is actually included in the query so that the `x_dim` and `y_dim` values in the first bit of code below can be updated to compare other metrics. The [Shiny app for this example](https://gilligan.shinyapps.io/page-analysis/) simply allows the user to choose which metrics to view.
 
 ```{r config, warning=FALSE, message=FALSE}
 
@@ -131,7 +139,8 @@ top_pages_by_devicecat_channel <- top_pages %>%
 
 ```
 
-# Visualize the Results
+### Visualize the Results
+
 We'll do one visualization of the traffic overall and another visualization that is faceted.
 
 The correlation coefficient overall is: **`r r`**.

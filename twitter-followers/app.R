@@ -1,3 +1,7 @@
+# THIS EXAMPLE DOES NOT CURRENTLY WORK. IT WILL BE UPDATED AS TIME ALLOWS, ALTHOUGH
+# IT IS ALWAYS GOING TO BE SOMEWHAT HAMPERED BY LIMITATIONS OF USING THE FREE
+# TWITTER API.
+
 # Load the necessary libraries. 
 library(shiny)
 
@@ -124,11 +128,11 @@ ui <- fluidPage(title = "Twitter Follower Analysis",
 ## server.R
 server <- function(input, output, session){
   
-  # Authenticate
-  setup_twitter_oauth(consumer_key = "PBZ1OOC61Fa4Rvu00weipJcHH", 
-                      consumer_secret = "m6OlgtM0iWpKUbnsMrPG4pv2NJC6BJVcZhXpUsImFnOCTaK6yf", 
-                      access_token = "9459132-AQbfbaDUhMvPlQNzjgcIXJWhGmnb22sJ9jckyctyUG", 
-                      access_secret = "FvGseA55680hAOEgHWyMCSynF9GVvm49a97nquOLMqLkv")
+  # Authenticate. Values need to be added here!
+  setup_twitter_oauth(consumer_key = "", 
+                      consumer_secret = "", 
+                      access_token = "", 
+                      access_secret = "")
   
   # Reactive function to pull the data.
   get_followers_details <- reactive({

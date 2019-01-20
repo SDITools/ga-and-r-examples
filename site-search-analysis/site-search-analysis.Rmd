@@ -1,14 +1,29 @@
 ---
 title: "Google Analytics - Site Search Exploration"
-output: html_notebook
+output: html_document
 ---
 
-This example assumes that site search tracking is enabled on the site in Google Analytics, and it basically does two things (after doing some cleanup of the text)
+### General Note
+This example is part of a larger set of examples of using Google Analytics with R:
 
-* Generates a word cloud
+* For additional examples, downloadable code, and explanations of the overall effort, see: https://github.com/SDITools/ga-and-r-examples
+* To see this specific example in Shiny (web/interactive) form, see: https://gilligan.shinyapps.io/site-search/
+
+### Overview
+
+This example assumes that site search tracking is enabled on the site in Google Analytics, and it basically does three things:
+
+* Cleans up the site search data by unnesting terms, removing stopwords, pushing everything to lowercase, and performing stemming
+* Generates a term-frequency matrix and a word cloud
 * Breaks out the searches into "topics" using LDA (https://www.tidytextmining.com/topicmodeling.html)
 
-To explore this example with your own Google Analytics data and without messing with any code, check out: https://gilligan.shinyapps.io/site-search/.
+This entire example is, essentially, cobbling together ideas from three specific people, so a hat tip to all three:
+
+* **[Nancy Koons](https://www.linkedin.com/in/nkoons/)** -- see the last section in [this post from Nancy from 2014](https://nanalytics.wordpress.com/2014/07/14/who-what-where-when-why-how-harnessing-the-power-of-internal-site-search/)
+* **[Sébastien Brodeur](https://www.linkedin.com/in/brodseba/)** -- Sébastien presented his experiments of text mining on-site search terms at Superweek in 2017, and that was my introduction to the basics of stopword removal and stemming, which, as this example shows, makes for much more usable text data.
+* **[Julia Silge](https://www.linkedin.com/in/juliasilge/)** -- Julia is the co-auther of the [tidytext R package](https://www.tidytextmining.com/) which is wildly less confusing (to me) than dealing with the text mining world of corpora. The topic modeling using LDA in this example came directly from her tutorial on the subject.
+
+So, now, on to the code!
 
 ## Setup/Config
 
@@ -32,12 +47,12 @@ ga_auth(token = ".httr-oauth")
 
 # Set the view ID and the date range. If you want to, you can swap out the Sys.getenv()
 # call and just replace that with a hardcoded value for the view ID. 
-view_id <- Sys.getenv("GA_VIEW_ID")
+view_id <- Sys.getenv("GA_VIEW_ID_DAPH")
 start_date <- Sys.Date() - 120        # The last 120 days
 end_date <- Sys.Date() - 1            # Yesterday
 
 # Minimum # of searches for a term to include in the wordcloud
-min_frequency <- 2
+min_frequency <- 1
 
 # Set the number of topics to include in the topic model
 num_topics <- 4
@@ -68,13 +83,13 @@ search_data <- ga_data %>%
   unnest_tokens(search_term, searchKeyword) %>% 
   group_by(search_term) %>% 
   summarise(searches = sum(searchUniques)) %>% 
-  select(search_term, searches) %>% 
+  dplyr::select(search_term, searches) %>% 
   ungroup() %>% 
   arrange(-searches)
 
 # Remove the stop words. 1) get the stopwords, 2) remove 'em
 stop_words <- get_stopwords(language = stopwords_lang) %>% 
-  select(word)
+  dplyr::select(word)
 
 search_data <- search_data %>% 
   anti_join(stop_words, by = c(search_term = "word"))
@@ -99,7 +114,7 @@ search_data_top_term <- search_data %>%
   mutate(searches = searches + row_number()/1000000) %>% 
   group_by(search_term_stem) %>% 
   top_n(1, searches) %>% 
-  select(-searches)
+  dplyr::select(-searches)
 
 # Join that back to search data after totalling the searches by the stemmed term.
 search_data <- search_data %>% 
@@ -107,7 +122,7 @@ search_data <- search_data %>%
   summarise(searches = sum(searches)) %>% 
   left_join(search_data_top_term) %>% 
   ungroup() %>% 
-  select(search_term_stem, search_term, searches) %>% 
+  dplyr::select(search_term_stem, search_term, searches) %>% 
   arrange(-searches)
 
 # Remove any additional "remove words" specified
@@ -149,7 +164,7 @@ This looks similar to the report in Google Analytics, but it's been processed to
 
 ```{r datatable_clean, message=FALSE, warning=FALSE}
 
-select(search_data, search_term, searches) %>% 
+dplyr::select(search_data, search_term, searches) %>% 
 datatable(colnames = c("Search Term", "Searches"),
           rownames = FALSE)
 

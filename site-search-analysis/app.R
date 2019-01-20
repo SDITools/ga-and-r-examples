@@ -187,7 +187,7 @@ server <- function(input, output, session){
       unnest_tokens(search_term, searchKeyword) %>% 
       group_by(search_term) %>% 
       summarise(searches = sum(searchUniques)) %>% 
-      select(search_term, searches) %>% 
+      dplyr::select(search_term, searches) %>% 
       ungroup() %>% 
       arrange(-searches)
     
@@ -196,7 +196,7 @@ server <- function(input, output, session){
     if(length(input$stopwords_lang > 0)){
       for(lang in input$stopwords_lang){
         # Get the stopwords for the language
-        stop_words <- get_stopwords(language = lang) %>% select(word)
+        stop_words <- get_stopwords(language = lang) %>% dplyr::select(word)
         search_data_clean <- search_data_clean %>%
           anti_join(stop_words, by = c(search_term = "word"))
       }
@@ -222,7 +222,7 @@ server <- function(input, output, session){
       mutate(searches = searches + row_number()/1000000) %>% 
       group_by(search_term_stem) %>% 
       top_n(1, searches) %>% 
-      select(-searches)
+      dplyr::select(-searches)
     
     # Join that back to search data after totalling the searches by the stemmed term.
     search_data_clean <- search_data_clean %>% 
@@ -230,7 +230,7 @@ server <- function(input, output, session){
       summarise(searches = sum(searches)) %>% 
       left_join(search_data_clean_top_term) %>% 
       ungroup() %>% 
-      select(search_term_stem, search_term, searches) %>% 
+      dplyr::select(search_term_stem, search_term, searches) %>% 
       arrange(-searches)
     
     # Convert the list of additional exclusion words to a vector. There may or may not be
@@ -295,7 +295,7 @@ server <- function(input, output, session){
   # Output the term-frequency table
   output$term_frequency <- DT::renderDataTable({
     get_search_data_clean() %>% 
-      select(search_term, searches) %>% 
+      dplyr::select(search_term, searches) %>% 
       datatable(colnames = c("Search Term", "Searches"),
                 rownames = FALSE)
   })

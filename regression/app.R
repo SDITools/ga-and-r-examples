@@ -125,14 +125,14 @@ ui <- fluidPage(title = "Regression with Day of Week",
                                                  tags$br(),
                                                  dataTableOutput("predict_vs_actual")
                                         )))),
-                  tags$hr(),
-                  tags$div("*This app is part of a larger set of apps that demonstrate some uses of R in conjunction",
-                           "with Google Analytics (and Twitter). For the code for this app, as well as an R Notebook",
-                           "that includes more details, see:", tags$a(href = "https://github.com/SDITools/ga-and-r-examples/",
-                                                                      "https://github.com/SDITools/ga-and-r-examples/"),"."),
-                  tags$br()
-                )
-                
+                tags$hr(),
+                tags$div("*This app is part of a larger set of apps that demonstrate some uses of R in conjunction",
+                         "with Google Analytics (and Twitter). For the code for this app, as well as an R Notebook",
+                         "that includes more details, see:", tags$a(href = "https://github.com/SDITools/ga-and-r-examples/",
+                                                                    "https://github.com/SDITools/ga-and-r-examples/"),"."),
+                tags$br()
+)
+
 ## server.R
 server <- function(input, output, session){
   
@@ -383,10 +383,20 @@ server <- function(input, output, session){
     # visualizing the residuals). This is just a vector of  predicted sessions.
     predict_vs_actual <- predict(step_model, ga_data_dummies)
     
+    # Get just the intercept (for a horizontal line we'll add)
+    y_intercept <- ind_vars %>% filter(Variable == "(Intercept)") %>% 
+      dplyr::select(Coefficient) %>% as.numeric()
+    
     # Add those predictions to a data frame that shows the actuals. We'll hold onto
     # this so we can preview it in the output. 
     predict_vs_actual_df <- ga_data_dummies %>% 
       cbind(data.frame(`Predicted Sessions` = predict_vs_actual)) 
+    
+    # Add that y-intercept as a constant to the data to be plotted. geom_hline()
+    # would be better for this, but I gave up fighting to get the legend I was
+    # wanting, so hacking around it this way
+    predict_vs_actual_df <- predict_vs_actual_df %>% 
+      mutate(Intercept = y_intercept)
     
     # Rename "Sessions" to "Actual Sessions" for clarity
     names(predict_vs_actual_df) <- gsub("sessions", "Actual Sessions", names(predict_vs_actual_df)) %>% 
@@ -394,12 +404,11 @@ server <- function(input, output, session){
     
     # For cleaner plotting, convert that to a tidy format and then turn it into a ggplot
     predict_vs_actual_for_plot <- predict_vs_actual_df %>% 
-      dplyr::select(Date = date, `Actual Sessions`, `Predicted Sessions`) %>% 
-      gather(key = metric, value = value, -Date)
+      dplyr::select(Date = date, `Actual Sessions`, `Predicted Sessions`, Intercept) %>% 
+      gather(key = metric, value = value, -Date) %>% 
+      # Total hack to add better spacing in the legend
+      mutate(metric = paste0(metric, "    "))
     
-    # Get just the intercept (for a horizontal line we'll add)
-    y_intercept <- ind_vars %>% filter(Variable == "(Intercept)") %>% 
-      dplyr::select(Coefficient) %>% as.numeric()
     
     # Get the max value so we can expand the limits
     y_lim <- max(predict_vs_actual_for_plot$value) * 1.1
@@ -408,7 +417,6 @@ server <- function(input, output, session){
     gg_predict_vs_actual <- ggplot(data = predict_vs_actual_for_plot,
                                    mapping = aes(x = Date, y = value, color = metric, linetype = metric)) +
       geom_line(size = 0.5) +
-      geom_hline(aes(yintercept = y_intercept, linetype = "Intercept"), color="#ed1c24") +
       scale_color_manual(values=c("#00a2b1", "gray50", "#ed1c24")) +
       scale_linetype_manual(name = "limit", values = c("solid", "dashed", "dotted")) +
       scale_y_continuous(expand = c(0,0), limits = c(0,y_lim), label=number_format(accuracy=1, big.mark=",")) +
