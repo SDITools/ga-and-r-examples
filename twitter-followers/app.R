@@ -150,8 +150,7 @@ server <- function(input, output, session){
     # Get the raw data
     followers_details <- get_followers_details()
     
-    cat(names(followers_details, "/n"))
-    
+    # cat(names(followers_details, "/n"))
     
     # Unnest it -- put each word on its own row and then collapse the individual
     # words. This will also make everything lowercase and strip punctuation!
