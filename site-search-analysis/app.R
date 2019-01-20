@@ -20,7 +20,7 @@ library(topicmodels)       # For the topic modeling using LDA
 ## ui.R
 ui <- fluidPage(title = "Site Search Analysis with Google Analytics",
                 tags$head(includeScript("gtm.js")),
-                tags$h2("Site Search Analysis with Google Analytics"),
+                tags$h2("Site Search Analysis with Google Analytics*"),
                 tags$div(paste("This requires a site that has site search and has the typical configuration of the",
                                "capture of search terms with Google Analytics. It's purely based on a search volume",
                                "analysis. Hat tips to Sébastien Brodeur, Nancy Koons, and Julia Silge for their",

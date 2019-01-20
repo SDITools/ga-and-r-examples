@@ -8,6 +8,8 @@ This example assumes that site search tracking is enabled on the site in Google 
 * Generates a word cloud
 * Breaks out the searches into "topics" using LDA (https://www.tidytextmining.com/topicmodeling.html)
 
+To explore this example with your own Google Analytics data and without messing with any code, check out: https://gilligan.shinyapps.io/site-search/.
+
 ## Setup/Config
 
 ```{r config}
@@ -30,7 +32,7 @@ ga_auth(token = ".httr-oauth")
 
 # Set the view ID and the date range. If you want to, you can swap out the Sys.getenv()
 # call and just replace that with a hardcoded value for the view ID. 
-view_id <- Sys.getenv("GA_VIEW_ID_ACS")
+view_id <- Sys.getenv("GA_VIEW_ID")
 start_date <- Sys.Date() - 120        # The last 120 days
 end_date <- Sys.Date() - 1            # Yesterday
 

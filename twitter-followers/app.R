@@ -15,7 +15,7 @@ library(topicmodels)       # For the topic modeling using LDA
 ## ui.R
 ui <- fluidPage(title = "Twitter Follower Analysis",
                 tags$head(includeScript("gtm.js")),
-                tags$h2("Twitter Follower Analysis"),
+                tags$h2("Twitter Follower Analysis*"),
                 tags$div("Enter a username and then text mine their followers' descriptions!"),
                 tags$br(),
                 sidebarLayout(

@@ -26,7 +26,7 @@ theme_base <- theme_light() +
 ## ui.R
 ui <- fluidPage(title = "Regression with Day of Week",
                 tags$head(includeScript("gtm.js")),
-                tags$h2("Regression with Day of Week"),
+                tags$h2("Regression with Day of Week*"),
                 tags$div(paste("Select a Google Analytics view and date range and then pull the data. From there, explore",
                                "a regression of a categorical/nominal variable -- day of week -- to see to what extent the",
                                "day of the week is predictive of traffic to the site.")),
@@ -49,15 +49,35 @@ ui <- fluidPage(title = "Regression with Day of Week",
                                # underlying call to Google Analytics occurs.
                                tags$div(style="text-align: center",
                                         actionButton("query_data", "Get/Refresh Data!", 
-                                                     style="color: #fff; background-color: #337ab7; border-color: #2e6da4"))),
+                                                     style="color: #fff; background-color: #337ab7; border-color: #2e6da4")),
+                               tags$br(),
+                               tags$hr(),
+                               tags$h4("Choose a Dummy!"),
+                               tags$div("It doesn't (really) matter what you choose for the dummy. The results of the",
+                                        "model will be (almost) the same (although the coefficients will change!),",
+                                        "and the model summary statistics will change (but just a little bit):"),
+                               tags$br(),
+                               selectInput("dummy_select",
+                                           label=NA,
+                                           choices = c("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"),
+                                           selected = "SAT")),
                   mainPanel(tabsetPanel(type = "tabs",
                                         tabPanel("Base Data",
                                                  tags$br(),
                                                  tags$div(paste("This is the base data and a visualization of the data",
                                                                 "that you queried. It should look pretty familiar!")),
+                                                 tags$br(),
                                                  plotlyOutput("base_data_plot", height = "400px"),
                                                  tags$br(),
                                                  dataTableOutput("base_data_table")),
+                                        tabPanel("Boxplot",
+                                                 tags$br(),
+                                                 tags$div(paste("Maybe this looks a little different than how you normally",
+                                                                "think of this data? It's grouping the data by day of week",
+                                                                "and showing the median and quartiles of the number of sessions",
+                                                                "recorded for each day.")),
+                                                 tags$br(),
+                                                 plotOutput("box_plot", height = "400px")),
                                         tabPanel("Dummies!",
                                                  tags$br(),
                                                  tags$div(paste("This is the exact same data, except columns have been added",
@@ -101,8 +121,9 @@ ui <- fluidPage(title = "Regression with Day of Week",
                                                                 "one gets multiplied by 1!")),
                                                  tags$br(),
                                                  tags$div(paste("And here is the original data (with dummy variables) with the actual and",
-                                                                "predicted values")),
-                                                 tags$br()
+                                                                "predicted values:")),
+                                                 tags$br(),
+                                                 dataTableOutput("predict_vs_actual")
                                         )))),
                   tags$hr(),
                   tags$div("*This app is part of a larger set of apps that demonstrate some uses of R in conjunction",
@@ -147,13 +168,17 @@ server <- function(input, output, session){
     # Get the base data
     ga_data <- get_ga_data()
     
+    # Set the list of days to include by *dropping* the selected dummy value
+    wdays <- c("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT")
+    include_cols <- wdays[!wdays %in% input$dummy_select]
+    include_cols <- c("date", include_cols, "sessions")
+    
     # Get the data set up where each day of the week has its own column. That means one of the 
     # columns will be a "1" and the rest will be "0s" for each date
     ga_data_dummies <- ga_data %>% 
       mutate(var = 1) %>%                                          # Put a 1 in all rows of a column
       spread(key = weekday, value = var, fill = 0) %>%             # Create the dummy variables
-      dplyr::select(date, SUN, MON, TUE, WED, THU, FRI, sessions)  # Re-order and drop "Sat"
-    
+      dplyr::select(one_of(include_cols))         # Re-order and drop the selected weekday
   })
   
   # Get the stepwise model
@@ -204,8 +229,8 @@ server <- function(input, output, session){
     # can be pasted together and output as RMarkdown. This gets a little screwy, but it's
     # just so we can output a "normal" looking equation.
     model_equation <- ind_vars %>%
-      mutate(rmd = ifelse(Variable == "(Intercept)", round(Coefficient, 2),
-                          paste0(round(Coefficient, 2), " \\times ", Variable)))
+      mutate(rmd = ifelse(Variable == "(Intercept)", round(Coefficient),
+                          paste0(round(Coefficient), " \\times ", Variable)))
     
     # Collapse that into the equation string
     model_equation <- model_equation$rmd %>%
@@ -237,7 +262,26 @@ server <- function(input, output, session){
       theme_base
     
     ggplotly(gg) %>% layout(autosize=TRUE)
+  })
+  
+  # Output the boxplot
+  output$box_plot <- renderPlot({
     
+    # Get the data to plot
+    ga_data <- get_ga_data()
+    
+    # Make a boxplot where we combine all of the data points for each day of week together
+    ggplot(ga_data, aes(x = weekday, y = sessions)) + 
+      geom_boxplot(fill = "gray90", color = "gray40", outlier.colour = "#00a2b1") +
+      scale_y_continuous(expand = c(0,0), limits=c(0, max(ga_data$sessions)*1.05), label = comma) +
+      labs(title = "Sessions Variation by Day of Week", y = "Sessions") +
+      theme_base +
+      theme(plot.title = element_text(size = 18, hjust = 0.5, face = "bold"),
+            axis.ticks = element_blank(),
+            axis.title.x = element_blank(),
+            axis.title.y = element_text(size = 14, face = "bold"),
+            axis.line.x = element_line(colour="gray20"),
+            axis.text = element_text(size = 14))
   })
   
   # Output the data with dummy variables
@@ -316,8 +360,16 @@ server <- function(input, output, session){
   
   # Output the table of coefficients
   output$ind_vars <- renderDataTable({
+    
+    # Get the coefficients table
+    ind_vars <- get_ind_vars()
+    
+    # Round the coefficients
+    ind_vars <- ind_vars %>% 
+      mutate(Coefficient = round(Coefficient))
+    
     # Get the intercept and coefficients
-    get_ind_vars() %>% datatable(rownames = FALSE, options = list(dom="t"))
+    datatable(ind_vars, rownames = FALSE, options = list(dom="t"))
   })
   
   # Output a plot showing the actual vs. predictions
@@ -385,7 +437,8 @@ server <- function(input, output, session){
     # Add those predictions to a data frame that shows the actuals. We'll hold onto
     # this so we can preview it in the output. 
     predict_vs_actual_df <- ga_data_dummies %>% 
-      cbind(data.frame(`Predicted Sessions` = predict_vs_actual)) 
+      cbind(data.frame(`Predicted Sessions` = predict_vs_actual)) %>% 
+      mutate(`Predicted.Sessions` = round(`Predicted.Sessions`))
     
     # Rename "Sessions" to "Actual Sessions" for clarity
     names(predict_vs_actual_df) <- gsub("sessions", "Actual Sessions", names(predict_vs_actual_df)) %>% 

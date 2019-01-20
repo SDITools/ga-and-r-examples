@@ -110,7 +110,7 @@ This step is not really necessary to do the regression. It's just useful to real
 
 # Make a boxplot where we combine all of the data points for each day of week together
 gg <- ggplot(ga_data, aes(x = Weekday, y = Sessions)) + 
-  geom_boxplot(fill = "#00a2b1", color = "gray80", outlier.colour = "gray60") +
+  geom_boxplot(fill = "gray90", color = "gray40", outlier.colour = "#00a2b1") +
   scale_y_continuous(expand = c(0,0), limits=c(0, max(ga_data$Sessions)*1.05), label = comma) +
   labs(title = "Sessions Variation by Day of Week") +
   theme_main +
