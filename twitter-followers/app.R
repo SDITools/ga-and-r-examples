@@ -1,6 +1,8 @@
 # Load the necessary libraries. 
 library(shiny)
-library(rtweet)            # How we actually get the Twitter data
+
+# Ideally, we would use rtweet, but rtweet does not play nice with Shiny, so twitteR it is!
+library(twitteR)           # How we actually get the Twitter data
 library(tidyverse)         # Includes dplyr, ggplot2, and others; very key!
 library(gridExtra)         # Grid / side-by-side plot layoutslibrary
 library(knitr)             # Nicer looking tables
@@ -122,26 +124,11 @@ ui <- fluidPage(title = "Twitter Follower Analysis",
 ## server.R
 server <- function(input, output, session){
   
-  # Get app credentials
-  
-  # Token creation function
-  createTokenNoBrowser<- function(appName, consumerKey, consumerSecret, 
-                                  accessToken, accessTokenSecret) {
-    app <- httr::oauth_app(appName, consumerKey, consumerSecret)
-    params <- list(as_header = TRUE)
-    credentials <- list(oauth_token = accessToken, 
-                        oauth_token_secret = accessTokenSecret)
-    token <- httr::Token1.0$new(endpoint = NULL, params = params, 
-                                app = app, credentials = credentials)
-    return(token)
-  }
-  
-  # Create the token
-  tw_token <- createTokenNoBrowser("rtweet_token", 
-                                   "PBZ1OOC61Fa4Rvu00weipJcHH", 
-                                   "m6OlgtM0iWpKUbnsMrPG4pv2NJC6BJVcZhXpUsImFnOCTaK6yf",
-                                   "9459132-AQbfbaDUhMvPlQNzjgcIXJWhGmnb22sJ9jckyctyUG",
-                                   "FvGseA55680hAOEgHWyMCSynF9GVvm49a97nquOLMqLkv")
+  # Authenticate
+  setup_twitter_oauth(consumer_key = "PBZ1OOC61Fa4Rvu00weipJcHH", 
+                      consumer_secret = "m6OlgtM0iWpKUbnsMrPG4pv2NJC6BJVcZhXpUsImFnOCTaK6yf", 
+                      access_token = "9459132-AQbfbaDUhMvPlQNzjgcIXJWhGmnb22sJ9jckyctyUG", 
+                      access_secret = "FvGseA55680hAOEgHWyMCSynF9GVvm49a97nquOLMqLkv")
   
   # Reactive function to pull the data.
   get_followers_details <- reactive({
@@ -150,14 +137,11 @@ server <- function(input, output, session){
     input$query_data
     
     # Get a list of all followers
-    user_followers <- isolate(get_followers(input$tw_account, n=75000, token = tw_token))
+    user <- isolate(getUser(input$tw_account))
     
-    # # Split that vector up into a list with 15,000 users per (needed to get the details)
-    # user_followers_split <- split(user_followers, rep(1:ceiling(nrow(user_followers)/15000), each=15000, 
-    #                                                             length.out = nrow(user_followers)))
-    
-    # Get the user details for all of those users
-    followers_details <-  isolate(lookup_users(user_followers$user_id, parse = TRUE, token = tw_token))
+    # Get the details for those followers
+    followers_details <- isolate(user$getFollowers(n=100) %>% twListToDF())
+
   })
   
   # Reactive function to get the cleaned up description data
@@ -166,13 +150,15 @@ server <- function(input, output, session){
     # Get the raw data
     followers_details <- get_followers_details()
     
+    cat(names(followers_details, "/n"))
+    
+    
     # Unnest it -- put each word on its own row and then collapse the individual
     # words. This will also make everything lowercase and strip punctuation!
     followers_data_clean <- followers_details %>% 
       unnest_tokens(description_term, description) %>% 
-      group_by(description_term) %>% 
-      summarise(occurrences = n()) %>% 
-      select(description, occurrences) %>% 
+      mutate(occurrences = 1) %>%      # Unlike site search, everything we pull occurs "once" each time it appears
+      dplyr::select(description, occurrences) %>% 
       ungroup() %>% 
       arrange(-occurrences)
     
@@ -181,7 +167,7 @@ server <- function(input, output, session){
     if(length(input$stopwords_lang > 0)){
       for(lang in input$stopwords_lang){
         # Get the stopwords for the language
-        stop_words <- get_stopwords(language = lang) %>% select(word)
+        stop_words <- get_stopwords(language = lang) %>% dplyr::select(word)
         description_data_clean <- description_data_clean %>%
           anti_join(stop_words, by = c(description = "word"))
       }
@@ -207,7 +193,7 @@ server <- function(input, output, session){
       mutate(occurrences = occurrences + row_number()/1000000) %>% 
       group_by(description_stem) %>% 
       top_n(1, occurrences) %>% 
-      select(-occurrences)
+      dplyr::select(-occurrences)
     
     # Join that back to description data after totalling the occurrences by the stemmed term.
     description_data_clean <- description_data_clean %>% 
@@ -215,7 +201,7 @@ server <- function(input, output, session){
       summarise(occurrences = sum(occurrences)) %>% 
       left_join(description_data_clean_top_term) %>% 
       ungroup() %>% 
-      select(description_stem, description, occurrences) %>% 
+      dplyr::select(description_stem, description, occurrences) %>% 
       arrange(-occurrences)
     
     # Convert the list of additional exclusion words to a vector. There may or may not be
@@ -226,7 +212,7 @@ server <- function(input, output, session){
       # character vector. The ", ?" regEx is so that this will work with
       # or without a space following the comma
       exclude_words <- unlist(strsplit(input$exclude_words,", ?"))
-      
+
       # Remove any additional "remove words" specified
       description_data_clean <-  description_data_clean %>%
         filter(!description %in% exclude_words)
@@ -265,8 +251,8 @@ server <- function(input, output, session){
   # Output the raw data
   output$followers_details <- DT::renderDataTable({
     get_followers_details() %>% 
-      select(user_id, description, followers_count) %>% 
-      arrange(-occurrences) %>% 
+      dplyr::select(screenName, description, followersCount) %>% 
+      arrange(-followersCount) %>%
       datatable(colnames = c("User","Description", "Followers"),  rownames = FALSE)
   })
   
@@ -274,7 +260,7 @@ server <- function(input, output, session){
   # Output the term-frequency table
   output$term_frequency <- DT::renderDataTable({
     get_description_data_clean() %>% 
-      select(description, occurrences) %>% 
+      dplyr::select(description, occurrences) %>% 
       datatable(colnames = c("Description Term", "Occurrences"),
                 rownames = FALSE)
   })
