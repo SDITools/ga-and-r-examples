@@ -2,7 +2,9 @@
 
 This repository has 5 (4.25, really) examples of using R with Google Analytics. These examples are designed to work with the free version of Google Analytics with just the base tag (implemented). This makes the examples less impactful, but the idea is that it makes them a safe and easy jumping off point for anyone who wants to use them.
 
-One set of slides that walks through the ideas and concepts behind these examples is available in [Google Slides](https://docs.google.com/presentation/d/1UBtbuIPmZ6yUj5VLPNYDcbV_0JSZzyyugvDPcAJd8Fs/edit?usp=sharing) or as slides with audio voiceover [on YouTube](https://youtu.be/SRZPLIcCvFU).
+One set of slides that walks through the ideas and concepts behind these examples -- presented at Columbus Web Analytics Wednesday in January 2019 -- is available in [Google Slides](https://docs.google.com/presentation/d/1UBtbuIPmZ6yUj5VLPNYDcbV_0JSZzyyugvDPcAJd8Fs/edit?usp=sharing) or as slides with audio voiceover [on YouTube](https://youtu.be/SRZPLIcCvFU). 
+
+The version of this material that was presented at Superweek 2019 is available [on Slideshare](https://www.slideshare.net/tgwilson/superweek-2019-digital-analytics-meets-data-science).
 
 ## There are Two Versions of Each Example
 There are two versions of each example here:
