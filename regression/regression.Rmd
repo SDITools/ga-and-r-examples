@@ -49,12 +49,19 @@ view_id <- Sys.getenv("GA_VIEW_ID")
 start_date <- Sys.Date() - 90        # The last 90 days
 end_date <- Sys.Date() - 1           # Yesterday
 
+start_date <- as.Date("2018-10-19")      # The last 90 days
+end_date <- as.Date("2019-01-16")           # Yesterday
+
 # Define our theme -- this will be used later for visualizations
 theme_main <- theme_light() +
-  theme(plot.title = element_text(hjust=0.5),
+  theme(text = element_text(family="Nunito"),
+        plot.title = element_text(hjust=0.5, size=18, face="bold"),
         legend.title = element_blank(),
-        axis.line.x = element_line(color = "gray20"),
+        axis.text = element_text(size=16),
+        axis.text.x = element_text(face = "bold", margin = margin(t = 5, unit = "pt")),
+        axis.line.x = element_line(color = "gray20", size=0.5),
         axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
         legend.position = "top",
         panel.border = element_blank(),
         panel.grid.major.y = element_line(color = "gray80"),
@@ -90,25 +97,27 @@ ga_data <- ga_data %>%
 names(ga_data) <- c("Date", "Weekday", "Sessions")
 
 # Show the head of the returned data
-head(ga_data, 12) %>% kable() %>% kable_styling(full_width = F) %>% 
-  column_spec(1, width = "15em") %>% 
-  column_spec(2, width = "9em") %>% 
-  column_spec(3, width = "9em")
+head(ga_data, 12) %>% kable() %>% kable_styling(full_width = F,
+                                                font_size = 24,
+                                                bootstrap_options = "condensed") %>% 
+  column_spec(1, width = "8em") %>% 
+  column_spec(2, width = "6em") %>% 
+  column_spec(3, width = "6em")
 
 ```
 
 
-```{r base-data-viz, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
+```{r base-data-viz, message=FALSE, warning=FALSE, fig.width=10, fig.height=4}
 
 # Go ahead and do a quick visualization of the resulting data
 gg <- ggplot(ga_data, aes(x = Date, y = Sessions)) + 
-  geom_line(color = "#00a2b1") +
+  geom_line(color = "#9a258f", size=1) +
   scale_y_continuous(expand = c(0,0), limits=c(0, max(ga_data$Sessions)*1.05), label = comma) +
   labs(title = "Sessions by Day",
        x = "Date") +
   theme_main
 
-ggplotly(gg)
+gg
 
 ```
 
@@ -118,14 +127,10 @@ This step is not really necessary to do the regression. It's just useful to real
 
 # Make a boxplot where we combine all of the data points for each day of week together
 gg <- ggplot(ga_data, aes(x = Weekday, y = Sessions)) + 
-  geom_boxplot(fill = "gray90", color = "gray40", outlier.colour = "#00a2b1") +
+  geom_boxplot(fill = "gray90", color = "gray40", outlier.colour = "#9a258f", outlier.size=2.5) +
   scale_y_continuous(expand = c(0,0), limits=c(0, max(ga_data$Sessions)*1.05), label = comma) +
   labs(title = "Sessions Variation by Day of Week") +
-  theme_main +
-  theme(axis.ticks = element_blank(),
-        axis.title.x = element_blank(),
-        axis.line.x = element_line(colour="gray20"))
-
+  theme_main
 gg
 
 ```
@@ -149,9 +154,11 @@ ga_data_dummies <- ga_data %>%
   dplyr::select(Date, SUN, MON, TUE, WED, THU, FRI, Sessions)  # Re-order and drop "SAT"
 
 # Display what the data now looks like
-kable(head(ga_data_dummies, 12)) %>% kable_styling(full_width = F) %>% 
-  column_spec(1, width = "8em") %>% 
-  column_spec(2:7, width = "6em") %>% 
+kable(head(ga_data_dummies, 12)) %>% kable_styling(full_width = F,
+                                                font_size = 24,
+                                                bootstrap_options = "condensed") %>%  
+  column_spec(1, width = "10em") %>% 
+  column_spec(2:7, width = "5em") %>% 
   column_spec(8, width = "8em")
 
 # When performing the regression, we don't actually need the date value, so make a data
@@ -233,7 +240,7 @@ ind_vars <- model_summary$coefficients %>% as.data.frame() %>%
 
 # Output a table with the independent variables
 kable(ind_vars, align = c("l", "r", "c")) %>% 
-  kable_styling(full_width = F, bootstrap_options = "condensed") %>% 
+  kable_styling(full_width = F, bootstrap_options = "condensed", font_size=24) %>% 
   column_spec(1, width = "6em") %>% 
   column_spec(2, width = "6em") %>% 
   column_spec(3, width = "10em")
@@ -264,9 +271,11 @@ But, wait. How do I multiply a number by a _day_?! This gets back to our creatio
 ```{r dummy_vars, message=FALSE, warning=FALSE}
 
 # Re-display what the data looks like with dummy variables
-kable(head(ga_data_dummies, 12)) %>% kable_styling(full_width = F) %>% 
-  column_spec(1, width = "8em") %>% 
-  column_spec(2:7, width = "6em") %>% 
+kable(head(ga_data_dummies, 12)) %>% kable_styling(full_width = F,
+                                                font_size = 24,
+                                                bootstrap_options = "condensed") %>% 
+  column_spec(1, width = "10em") %>% 
+  column_spec(2:7, width = "5em") %>% 
   column_spec(8, width = "8em")
 
 ```
@@ -293,14 +302,15 @@ predict_vs_actual_df <- ga_data_dummies %>%
 
 # Rename "Sessions" to "Actual Sessions" for clarity
 names(predict_vs_actual_df) <- gsub("Sessions", "Actual Sessions", names(predict_vs_actual_df)) %>% 
-  gsub("Predicted.Actual.Sessions", "Predicted Sessions", .)
+  gsub("Predicted.Actual.Sessions", "Predicted", .)
 
 # Output the head
 kable(head(predict_vs_actual_df, 12)) %>% 
-  kable_styling(full_width = F, bootstrap_options = "condensed") %>% 
-  column_spec(1, width = "8em") %>% 
+  kable_styling(full_width = F, bootstrap_options = "condensed", font_size=20) %>% 
+  column_spec(1, width = "60em") %>% 
   column_spec(2:7, width = "6em") %>% 
-  column_spec(8:9, width = "13em")
+  column_spec(8, width = "80em") %>% 
+  column_spec(9, width = "40em")
 
 ```
 
@@ -316,7 +326,7 @@ Finally, let's plot the results showing three things:
 * **The Predicted Sessions** -- what our regression model (which we determined explains `r round(adj_r_sq, 2)/100`% of the actual results)
 * **The Intercept** -- this is the constant; think of it as the baseline from which each independent variable increases or decreases the prediction
 
-```{r plot_result, message=FALSE, warning=FALSE, fig.width = 10, fig.height=6}
+```{r plot_result, message=FALSE, warning=FALSE, fig.width = 10, fig.height=4}
 
 # Get just the intercept (for a horizontal line we'll add)
 y_intercept <- ind_vars %>% filter(Variable == "(Intercept)") %>% 
@@ -330,7 +340,7 @@ predict_vs_actual_for_plot <- predict_vs_actual_df %>%
 
 # For cleaner plotting, convert that to a tidy format and then turn it into a ggplot
 predict_vs_actual_for_plot <- predict_vs_actual_for_plot %>% 
-  dplyr::select(Date = Date, `Actual Sessions`, `Predicted Sessions`, Intercept) %>% 
+  dplyr::select(Date = Date, `Actual Sessions`, `Predicted`, Intercept) %>% 
   gather(key = metric, value = value, -Date) %>% 
   # Total hack to add better spacing in the legend
   mutate(metric = paste0(metric, "    "))
@@ -342,16 +352,19 @@ y_lim <- max(predict_vs_actual_for_plot$value) * 1.1
 gg_predict_vs_actual <- ggplot() +
   geom_line(data = predict_vs_actual_for_plot,
             mapping = aes(x = Date, y = value, color = metric, 
-                          linetype = metric), size = 0.8) +
+                          linetype = metric), size = 1) +
   # geom_hline(mapping = aes(linetype = "Intercept", yintercept = y_intercept), 
   #            color="#ed1c24") +
-  scale_color_manual(values=c("#00a2b1", "#ed1c24", "gray30" )) +
+  scale_color_manual(values=c("#9a258f", "#ed1c24", "gray30" )) +
   scale_linetype_manual(values = c("solid", "dashed", "dotted" )) +
   scale_y_continuous(expand = c(0,0), limits = c(0,y_lim), label=number_format(accuracy=1, big.mark=",")) +
   labs(x = "Date", y = "Sessions", title = "Sessions by Day: Actual vs. Predicted") +
   # guides(fill=guide_legend(keywidth=0.8, keyheight=0.1, default.unit="inch")) +
   theme_main +
-  theme(legend.key.width=unit(2,"line"))
+  theme(legend.key.width=unit(4,"line"),
+        legend.text = element_text(size=16),
+        axis.line.x = element_line(color = "gray20"),
+        plot.title = element_blank())
 
 # Output the chart
 gg_predict_vs_actual 

@@ -1,0 +1,24 @@
+---
+title: "Normal Distribution"
+output: html_notebook
+---
+
+A simple normal distribution needed for a visualization in a presentation.
+
+```{r fig.width=10, fig.height=5}
+library(tidyverse)
+library(cowplot)
+
+
+gg <- ggplot(data = data.frame(x = c(-3, 3)), aes(x)) +
+  stat_function(fun = dnorm, n = 101, args = list(mean = 0, sd = 1)) + ylab("") +
+  scale_y_continuous(breaks = NULL) +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank())
+
+gg
+
+
+```
+
