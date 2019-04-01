@@ -20,7 +20,7 @@ Links to "executed code showing output" (**RPubs**) as well as links to Shiny ap
 | Page-Level Analysis/Comparison with Two Metrics | `page-analysis-two-metrics` | [RPubs](http://rpubs.com/tgwilson/page-analysis) / [Shiny](https://gilligan.shinyapps.io/page-analysis/) |
 | (Light) Text Mining of On-Site Search Data | `site-search-analysis` | [RPubs](http://rpubs.com/tgwilson/site-search) / [Shiny](https://gilligan.shinyapps.io/site-search/) |
 | (Light) Text Mining of Twitter Followers | `twitter-followers` | [RPubs](http://rpubs.com/tgwilson/twitter-followers) |
-| Regression Analysis with a Nominal / Categorical Value (Day of Week) | `regression` | [RPubs](http://rpubs.com/tgwilson/site-search) / [Shiny](https://gilligan.shinyapps.io/regression/) |
+| Regression Analysis with a Nominal / Categorical Value (Day of Week) | `regression` | [RPubs](http://rpubs.com/tgwilson/day-of-week-regression) / [Shiny](https://gilligan.shinyapps.io/regression/) |
 
 ## A Few Notes on the Shiny Apps
 
