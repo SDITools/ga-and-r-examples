@@ -1,6 +1,10 @@
 # Google Analytics (and a little bit of Twitter) and R
 
-This repository has 5 (4.5, really) examples of using R with Google Analytics. These examples are designed to work with the free version of Google Analytics with just the base tag (implemented). This makes the examples less impactful, but the idea is that it makes them a safe and easy jumping off point for anyone who wants to use them.
+This repository has 5 (4.25, really) examples of using R with Google Analytics. These examples are designed to work with the free version of Google Analytics with just the base tag (implemented). This makes the examples less impactful, but the idea is that it makes them a safe and easy jumping off point for anyone who wants to use them.
+
+One set of slides that walks through the ideas and concepts behind these examples -- presented at Columbus Web Analytics Wednesday in January 2019 -- is available in [Google Slides](https://docs.google.com/presentation/d/1UBtbuIPmZ6yUj5VLPNYDcbV_0JSZzyyugvDPcAJd8Fs/edit?usp=sharing) or as slides with audio voiceover [on YouTube](https://youtu.be/SRZPLIcCvFU). 
+
+The version of this material that was presented at Superweek 2019 is available [on Slideshare](https://www.slideshare.net/tgwilson/superweek-2019-digital-analytics-meets-data-science).
 
 ## There are Two Versions of Each Example
 There are two versions of each example here:
@@ -14,9 +18,9 @@ Links to "executed code showing output" (**RPubs**) as well as links to Shiny ap
 |-----------------------------------------------------|---------------|:-------------:|
 | Time-Normalized Pageviews | `time-normalized-pageviews` | [RPubs](http://rpubs.com/tgwilson/time-normalized-pageviews) / [Shiny](https://gilligan.shinyapps.io/time-normalized/) |
 | Page-Level Analysis/Comparison with Two Metrics | `page-analysis-two-metrics` | [RPubs](http://rpubs.com/tgwilson/page-analysis) / [Shiny](https://gilligan.shinyapps.io/page-analysis/) |
-| (Light) Text Mining of On-Site Search Data | `site-search-analysis` | [RPubs](http://rpubs.com/tgwilson/day-of-week-regression) / [Shiny](https://gilligan.shinyapps.io/site-search/) |
+| (Light) Text Mining of On-Site Search Data | `site-search-analysis` | [RPubs](http://rpubs.com/tgwilson/site-search) / [Shiny](https://gilligan.shinyapps.io/site-search/) |
 | (Light) Text Mining of Twitter Followers | `twitter-followers` | [RPubs](http://rpubs.com/tgwilson/twitter-followers) |
-| Regression Analysis with a Nominal / Categorical Value (Day of Week) | `regression` | [RPubs](http://rpubs.com/tgwilson/site-search) / [Shiny](https://gilligan.shinyapps.io/regression/) |
+| Regression Analysis with a Nominal / Categorical Value (Day of Week) | `regression` | [RPubs](http://rpubs.com/tgwilson/day-of-week-regression) / [Shiny](https://gilligan.shinyapps.io/regression/) |
 
 ## A Few Notes on the Shiny Apps
 
