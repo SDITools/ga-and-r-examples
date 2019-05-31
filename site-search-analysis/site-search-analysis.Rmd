@@ -3,6 +3,12 @@ title: "Google Analytics - Site Search Exploration"
 output: html_document
 ---
 
+<style>
+td {
+    padding: 4px 10px;
+}
+</style>
+
 ### General Note
 This example is part of a larger set of examples of using Google Analytics with R:
 
@@ -47,22 +53,26 @@ ga_auth(token = ".httr-oauth")
 
 # Set the view ID and the date range. If you want to, you can swap out the Sys.getenv()
 # call and just replace that with a hardcoded value for the view ID. 
-view_id <- Sys.getenv("GA_VIEW_ID_DAPH")
-start_date <- Sys.Date() - 120        # The last 120 days
+view_id <- Sys.getenv("GA_VIEW_ID_MCLS")
+start_date <- Sys.Date() - 30        # The last 30 days
 end_date <- Sys.Date() - 1            # Yesterday
 
 # Minimum # of searches for a term to include in the wordcloud
-min_frequency <- 1
+min_frequency <- 20
 
 # Set the number of topics to include in the topic model
-num_topics <- 4
+num_topics <- 3
 
 # Set the stopwords language
 stopwords_lang <- "en"
 
-# Words to exclude (because they're too dominant to be interesting). This will exclude
-# them from the main word cloud AND from the topic modeling
-exclude_words <- c("cancer", "breast", "de")
+# Words to exclude (because they're too dominant to be interesting or are just 
+# known glitches in the data). This will exclude them from the main word cloud AND 
+# from the topic modeling
+exclude_words <- ""
+
+# Second set of exclude words for showing the "post exclude" word cloud
+exclude_words_2 <- c("frame", "box")
 
 ```
 
@@ -75,7 +85,50 @@ ga_data <- google_analytics(viewId = view_id,
                             date_range = c(start_date, end_date),
                             metrics = "searchUniques",
                             dimensions = "searchKeyword",
+                            order = order_type("searchUniques", sort_order = "DESCENDING", 
+                                               orderType = "VALUE"),
                             anti_sample = TRUE)
+
+
+# Go ahead and remove "(other)" if cardinality limits were hit
+ga_data <- ga_data %>% filter(searchKeyword != "(other)")
+
+# Site glitch -- remove "redirect"
+ga_data <- ga_data %>% filter(searchKeyword != "redirect")
+
+```
+
+## Raw Data Wordcloud
+
+```{r wordcloud_raw, message=FALSE, warning=FALSE}
+
+# Set a seed for reproducibility
+set.seed(1971)
+
+# Set a color palette
+color_palette <- rev(brewer.pal(8,"Spectral")) 
+
+# Generate the word cloud!
+wordcloud(words = ga_data$searchKeyword, 
+          freq = ga_data$searchUniques,
+          scale=c(5.5,0.6),
+          min.freq=min_frequency,
+          max.words=500, 
+          random.order=FALSE,
+          rot.per=.0,
+          colors=color_palette)
+
+```
+
+## Clean Up the Data
+
+This is where the data gets "cleansed:" 
+
+* Unnesting the phrases so there is one word per row
+* Removing stopwords
+* Stemming
+
+```{r clean_data, message=FALSE, warning=FALSE}
 
 # Unnest it -- put each word on its own row and then collapse the individual
 # words. This will also make everything lowercase and strip punctuation!
@@ -125,6 +178,12 @@ search_data <- search_data %>%
   dplyr::select(search_term_stem, search_term, searches) %>% 
   arrange(-searches)
 
+# Remove any search terms that are now either just a single character or that
+# are a numeric
+search_data <- search_data %>% 
+  filter(is.na(as.numeric(search_term))) %>% 
+  filter(!grepl("^.$", search_term))
+
 # Remove any additional "remove words" specified
 search_data <-  search_data %>%
   filter(!search_term_stem %in% exclude_words)
@@ -140,7 +199,8 @@ rm(search_data_top_term)
 
 ga_data %>% 
   arrange(-searchUniques) %>% 
-  datatable(colnames = c("Search Term", "Searches"),  rownames = FALSE)
+  datatable(colnames = c("Search Term", "Searches"),  rownames = FALSE) %>% 
+  formatCurrency('searchUniques',currency = "", interval = 3, mark = ",", digits=0)
 
 ```
 
@@ -152,8 +212,9 @@ Searches that started with a question word: who, what why, when, where, how.
 
 ga_data %>% 
   arrange(-searchUniques) %>% 
-  filter(grepl("^who|^what|^why|^what|^when|^where|^how.*", searchKeyword)) %>% 
-  datatable(colnames = c("Question", "Searches"),  rownames = FALSE)
+  filter(grepl("(^who|^what|^why|^what|^when|^where|^how) .*", searchKeyword)) %>% 
+  datatable(colnames = c("Question", "Searches"),  rownames = FALSE) %>% 
+  formatCurrency('searchUniques',currency = "", interval = 3, mark = ",", digits=0)
 
 ```
 
@@ -165,8 +226,9 @@ This looks similar to the report in Google Analytics, but it's been processed to
 ```{r datatable_clean, message=FALSE, warning=FALSE}
 
 dplyr::select(search_data, search_term, searches) %>% 
-datatable(colnames = c("Search Term", "Searches"),
-          rownames = FALSE)
+datatable(colnames = c("Search Term", "Searches"), rownames = FALSE) %>% 
+    formatCurrency('searches',currency = "", interval = 3, mark = ",", digits=0)
+
 
 ```
 
@@ -176,12 +238,6 @@ datatable(colnames = c("Search Term", "Searches"),
 A wordcloud based on the cleaned up and unnested words.
 
 ```{r wordcloud, message=FALSE, warning=FALSE}
-
-# Set a seed for reproducibility
-set.seed(1971)
-
-# Set a color palette
-color_palette <- rev(brewer.pal(8,"Spectral")) 
 
 # Generate the word cloud!
 wordcloud(words = search_data$search_term, 
@@ -194,6 +250,26 @@ wordcloud(words = search_data$search_term,
           colors=color_palette)
 
 ```
+
+Generate a word cloud that has removed some additional exclude words.
+
+```{r wordcloud_exclude, message=FALSE, warning=FALSE}
+
+search_data_exclude <- search_data %>% 
+  filter(!search_term %in% exclude_words_2)
+
+# Generate the word cloud!
+wordcloud(words = search_data_exclude$search_term, 
+          freq = search_data_exclude$searches,
+          scale=c(5.5,0.6),
+          min.freq=min_frequency,
+          max.words=500, 
+          random.order=FALSE,
+          rot.per=.0,
+          colors=color_palette)
+
+```
+
 
 ## Look for Topics!
 
