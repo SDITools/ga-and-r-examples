@@ -42,4 +42,12 @@ deployApp(appFiles = c("app.R", "ga-web-client.json", "gtm.js"),
           forceUpdate = TRUE)
 setwd("..")
 
+# Forecasting / Anomaly Detection
+setwd("forecasting")
+deployApp(appFiles = c("app.R", "ga-web-client.json", "gtm.js"),
+          appName = "forecasting",
+          appTitle = "Google Analytics - Anomaly Detection with Holt-Winters Forecasting",
+          forceUpdate = TRUE)
+setwd("..")
+
 
