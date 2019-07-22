@@ -44,7 +44,6 @@ theme_sparklines <- theme_bw() +
         legend.title = element_blank(),
         legend.background = element_blank(),
         legend.position = "none",
-        legend.justification = "center",
         strip.text.x = element_text(face = "bold", size = 14, colour = "grey10", family="Nunito"),
         strip.text.y = element_text(face = "bold", size = 14, colour = "grey10", 
                                     angle = 180, hjust=1, family="Nunito"),
@@ -107,13 +106,13 @@ ui <- fluidPage(title = "Anomaly Detection through Holt-Winters Forecasting",
                                                                 "We've broken out the actual data into three components: seasonal",
                                                                 "with a weekly 'season', trend, and random (noise).")),
                                                  tags$br(),
-                                                 plotlyOutput("time_series_decomp_plot")),
-                                        # tabPanel("Forecast with a Prediction Interval",
-                                        #          tags$br(),
-                                        #          tags$div(paste("This is the raw summary of a stepwise regression model using",
-                                        #                         "the data set on the 'Dummies' tab. It's not super pretty, is it?")),
-                                        #          tags$br(),
-                                        #          plotlyOutput("final_assessment"))
+                                                 plotOutput("time_series_decomp_plot")),
+                                        tabPanel("Forecast with a Prediction Interval",
+                                                 tags$br(),
+                                                 tags$div(paste("This is the raw summary of a stepwise regression model using",
+                                                                "the data set on the 'Dummies' tab. It's not super pretty, is it?")),
+                                                 tags$br(),
+                                                 plotOutput("final_assessment")),
                                         tabPanel("Master Data Table",
                                                  dataTableOutput("data_table"))
                   ))),
@@ -188,7 +187,7 @@ server <- function(input, output, session){
   # is what we'll use to build the forecast
   get_ga_data_ts <- reactive({
     get_ga_data_training() %>%
-      dplyr::select(sessions) %>% 
+      dplyr::pull(sessions) %>% 
       ts(frequency = 7)
   })
   
@@ -204,6 +203,25 @@ server <- function(input, output, session){
     # Add a column that is just the actuals data of interest
     ga_data_plot <- ga_data_plot %>%
       mutate(sessions_assess = ifelse(is.na(sessions_training), sessions_all, NA))
+    
+    # Generate a Holt Winters forecast
+    hw <- HoltWinters(get_ga_data_ts())
+    
+    # Predict the next X days (the X days of interest). Go ahead and convert it to a data frame
+    forecast_sessions <- predict(hw, n.ahead = input$check_period, prediction.interval = T, interval_level = 0.95) %>%
+      as.data.frame()
+    
+    # Add in the dates so we can join this with the original data. We know it was the 7 days
+    # starting from cutoff_date
+    forecast_sessions$date <- dates_forecast() %>% pull(date)
+    
+    # Add these columns to the original data and add a column that IDs anomaly points by 
+    # checking to see if the actual value is outside the upper or lower bounds. If it is,
+    # put the value. We'll use this to highlight the anomalies.
+    ga_data_plot <- ga_data_plot %>%
+      left_join(forecast_sessions) %>%
+      mutate(anomaly = ifelse(sessions_all < lwr | sessions_all > upr, sessions_all, NA))
+    
   })
   
   ## Outputs
@@ -255,11 +273,11 @@ server <- function(input, output, session){
   })
   
   # Output the time-series decomposition
-  output$time_series_decomp_plot <- renderPlotly({
+  output$time_series_decomp_plot <- renderPlot({
     
     # Get the time-series data and the training data
     ga_data_ts <- get_ga_data_ts()
-    ga_data_trainins <- get_ga_data_training()
+    ga_data_training <- get_ga_data_training()
     
     # Decompose the time-series data
     ga_stl <- stl(ga_data_ts,
@@ -291,9 +309,37 @@ server <- function(input, output, session){
       scale_color_manual(values=c("#0060AF", "#999999", "#999999", "#999999")) +
       theme_sparklines
     
-    # Plot the data
-    ggplotly(ga_plot) %>% layout(autosize=TRUE)
+    # Plot the data. Plotly jacks this up, so just going static visual for this one
+    ga_plot
   })
+  
+  # Output the actual forecast with a comparison to actuals
+  output$final_assessment <- renderPlot({
+    
+    # Get the data to use in the plot
+    ga_data_plot <- get_ga_data_plot()
+    
+    # Get the upper limit for the plot. We'll use this for all of the plots just for clarity
+    y_max <- max(ga_data_plot$sessions_all) * 1.03
+    
+    # Build the plot
+    ga_plot <- ggplot(ga_data_plot, mapping = aes(x = date)) +
+      geom_ribbon(aes(ymin = ga_data_plot$lwr, ymax = ga_data_plot$upr), fill = "gray90") +
+      geom_line(aes(y = ga_data_plot$sessions_all), color = "#0060AF", size = 0.75) +
+      geom_line(aes(y = ga_data_plot$fit), color = "gray50", linetype = "dotted", size = 1) +
+      geom_vline(aes(xintercept = cutoff_date()),
+                 color = "gray40", linetype = "dashed", size = 1) +
+      scale_y_continuous(label=comma, expand = c(0, 0), limits = c(0, y_max)) +
+      labs(x = " ") +
+      theme_base +
+      if(sum(ga_data_plot$anomaly, na.rm = TRUE) > 0){
+        geom_point(aes(y = ga_data_plot$anomaly), color = "#F58220", size = 2.5)
+      }
+    
+    # Plot the data
+    ga_plot
+  })
+  
   
   
 }

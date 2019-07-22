@@ -350,7 +350,7 @@ ga_data_plot <- ga_data_plot %>%
   mutate(anomaly = ifelse(sessions_all < lwr | sessions_all > upr, sessions_all, NA))
 
 # Figure out the max value (for plotting) and then bump it up a bit
-max_y <- max(select(ga_data_plot, -date))
+max_y <- max(dplyr::select(ga_data_plot, -date))
 
 ```
 
