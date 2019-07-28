@@ -1,5 +1,3 @@
-{% include includes/header.html %}
-
 # Google Analytics (and a little bit of Twitter) and R
 
 This repository has ~5 examples of using R with Google Analytics (plus one example of using R with Twitter). These examples are designed to work with the free version of Google Analytics with just the base tag (implemented). This makes the examples less impactful, but the idea is that it makes them a safe and easy jumping off point for anyone who wants to use them.
