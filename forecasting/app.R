@@ -5,7 +5,7 @@ library(googleAnalyticsR)  # How we actually get the Google Analytics data
 
 gar_set_client(web_json = "ga-web-client.json",
                scopes = "https://www.googleapis.com/auth/analytics.readonly")
-options(googleAuthR.redirect = "https://gilligan.shinyapps.io/regression/")
+options(googleAuthR.redirect = "https://gilligan.shinyapps.io/forecasting/")
 
 library(tidyverse)         # Includes dplyr, ggplot2, and others; very key!
 library(knitr)             # Nicer looking tables
@@ -16,8 +16,7 @@ library(lubridate)         # For working with dates a bit
 
 # Define the base theme for visualizations
 theme_base <- theme_bw() +
-  theme(text = element_text(family="Nunito"),
-        plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
+  theme(plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
         plot.margin = margin(1.5,0,0,0,"cm"),
         axis.text.x = element_blank(),
         axis.text.y = element_text(size = 14),
@@ -71,10 +70,6 @@ ui <- fluidPage(title = "Anomaly Detection through Holt-Winters Forecasting",
                                               label = "Select the overall date range to use:",
                                               start = Sys.Date()-90,
                                               end = Sys.Date()-1),
-                               # Assessment Days
-                               sliderInput("check_period", 
-                                           label = "How many of those days do you want to check for anomalies?",
-                                           min = 3, max = 14, value = 7),
                                # Whether or not to enable anti-sampling
                                checkboxInput("anti_sampling",
                                              label = "Include anti-sampling (slows down app a bit).",
@@ -85,7 +80,16 @@ ui <- fluidPage(title = "Anomaly Detection through Holt-Winters Forecasting",
                                         actionButton("query_data", "Get/Refresh Data!", 
                                                      style="color: #fff; background-color: #337ab7; border-color: #2e6da4")),
                                tags$br(),
-                               tags$hr()),
+                               tags$hr(),
+                               # Assessment Days
+                               sliderInput("check_period", 
+                                           label = "How many of those days do you want to check for anomalies?",
+                                           min = 3, max = 14, value = 7),
+                               # Prediction Interval
+                               sliderInput("prediction_interval", 
+                                           label = "Adjust the prediction interval:",
+                                           min = 0.8, max = 0.95, value = 0.95, step = 0.05)),
+                  
                   mainPanel(tabsetPanel(type = "tabs",
                                         tabPanel("Base Data",
                                                  tags$br(),
@@ -109,12 +113,17 @@ ui <- fluidPage(title = "Anomaly Detection through Holt-Winters Forecasting",
                                                  plotOutput("time_series_decomp_plot")),
                                         tabPanel("Forecast with a Prediction Interval",
                                                  tags$br(),
-                                                 tags$div(paste("This is the raw summary of a stepwise regression model using",
-                                                                "the data set on the 'Dummies' tab. It's not super pretty, is it?")),
+                                                 tags$div(paste("This is the final assessment of the data, which has used the seasonal",
+                                                                "and trend components to create a forecast, the random component to",
+                                                                "determine the prediction interval, and then the actual results are",
+                                                                "shown on top of that.")),
                                                  tags$br(),
                                                  plotOutput("final_assessment")),
-                                        tabPanel("Master Data Table",
-                                                 dataTableOutput("data_table"))
+                                        tabPanel("Data Table",
+                                                 tags$br(),
+                                                 tags$div(paste("This is the full data table.")),
+                                                 tags$br(),
+                                                 dataTableOutput(("final_data")))
                   ))),
                 tags$hr(),
                 tags$div("*This app is part of a larger set of apps that demonstrate some uses of R in conjunction",
@@ -208,7 +217,8 @@ server <- function(input, output, session){
     hw <- HoltWinters(get_ga_data_ts())
     
     # Predict the next X days (the X days of interest). Go ahead and convert it to a data frame
-    forecast_sessions <- predict(hw, n.ahead = input$check_period, prediction.interval = T, interval_level = 0.95) %>%
+    forecast_sessions <- predict(hw, n.ahead = input$check_period, prediction.interval = T, 
+                                 level = input$prediction_interval) %>%
       as.data.frame()
     
     # Add in the dates so we can join this with the original data. We know it was the 7 days
@@ -225,9 +235,6 @@ server <- function(input, output, session){
   })
   
   ## Outputs
-  
-  ##### TEMP: Master data table
-  output$data_table <- renderDataTable(get_ga_data_plot())
   
   # Output the base data plot
   output$base_data_plot <- renderPlotly({
@@ -319,8 +326,12 @@ server <- function(input, output, session){
     # Get the data to use in the plot
     ga_data_plot <- get_ga_data_plot()
     
+    # Replace any lower bound values that are negative with zero
+    ga_data_plot <- ga_data_plot %>% 
+      mutate(lwr = ifelse(lwr < 0, 0, lwr))
+    
     # Get the upper limit for the plot. We'll use this for all of the plots just for clarity
-    y_max <- max(ga_data_plot$sessions_all) * 1.03
+    y_max <- max(max(ga_data_plot$sessions_all), max(ga_data_plot$upr)) * 1.03
     
     # Build the plot
     ga_plot <- ggplot(ga_data_plot, mapping = aes(x = date)) +
@@ -340,6 +351,13 @@ server <- function(input, output, session){
     ga_plot
   })
   
+  # Output the table of raw data
+  output$final_data <- renderDataTable({
+    
+    # Get the data to use in the plot
+    ga_data_plot <- get_ga_data_plot()
+    
+  })
   
   
 }

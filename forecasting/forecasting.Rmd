@@ -7,7 +7,7 @@ output: html_notebook
 This example is part of a larger set of examples of using Google Analytics with R:
 
 * For additional examples, downloadable code, and explanations of the overall effort, see: https://github.com/SDITools/ga-and-r-examples
-* To see this specific example in Shiny (web/interactive) form, see: XXXXXX
+* To see this specific example in Shiny (web/interactive) form, see: https://gilligan.shinyapps.io/forecasting/
 
 ### Overview
 
@@ -30,7 +30,7 @@ pacman::p_load(googleAnalyticsR,  # How we actually get the Google Analytics dat
 
 # Authorize GA. Depending on if you've done this already and a .ga-httr-oauth file has
 # been saved or not, this may pop you over to a browser to authenticate.
-ga_auth(token = ".httr-oauth")
+ga_auth(token = ".httr-oauth", new_user = TRUE)
 
 # Set the total number of weeks to be used. The most recent week will be the "checked" week,
 # while the weeks before will be used to build the forecast.
@@ -39,8 +39,8 @@ total_weeks <- 7
 # Set the view ID and the date range. If you want to, you can swap out the Sys.getenv()
 # call and just replace that with a hardcoded value for the view ID. 
 view_id <- Sys.getenv("GA_VIEW_ID")
-end_date <- Sys.Date() - wday(Sys.Date())    # The most recent Saturday
-start_date <- end_date - total_weeks * 7 + 1                # Start date based on total_weeks
+end_date <- Sys.Date() - wday(Sys.Date())     # The most recent Saturday
+start_date <- end_date - total_weeks * 7 + 1  # Start date based on total_weeks
 
 # Define our theme -- this will be used later for visualizations of the full-sized charts
 theme_hw <- theme_bw() +
@@ -82,6 +82,14 @@ theme_sparklines <- theme_bw() +
         panel.grid.minor = element_blank(),
         panel.spacing = unit(0,"in"),
         panel.background = element_rect(fill = NA, color = NA))
+
+```
+
+```{r config-override, echo=FALSE}
+
+# Hardcode the start and end dates to something that will show anomalies
+start_date <- as.Date("2019-02-03")
+end_date <- as.Date("2019-03-23")
 
 ```
 
@@ -327,7 +335,7 @@ ga_plot
 
 ### Build the Forecast
 
-This is the actual building of the forecast. It does all of the time-series decomposition described above (but with a bit more complexity) and builds the model inherently within these function calls.
+This is the actual building of the forecast. It does all of the time-series decomposition described above (but with a bit more complexity) and builds the model inherently within these function calls. **To be clear**, the time-series decomposition illustrated in the last step is not _exactly_ what is being used for the forecasting, but, conceptually, it's pretty much what is happening under the hood with the `HoltWinters` function.
 
 ```{r forecast, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
 

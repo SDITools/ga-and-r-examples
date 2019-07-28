@@ -26,6 +26,7 @@ rsconnect/
 .Rproj.user
 
 **/.httr-oauth
+**/.ga-httr-oauth
 **/ga-web-client.json
 
 # Exclude GTM container includes

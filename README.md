@@ -1,6 +1,14 @@
+---
+title: "Google Analytics (and a little bit of Twitter) and R""
+author: "Tim Wilson"
+output:
+  html_document:
+    include: includes/header.html
+---
+
 # Google Analytics (and a little bit of Twitter) and R
 
-This repository has 5 (4.25, really) examples of using R with Google Analytics. These examples are designed to work with the free version of Google Analytics with just the base tag (implemented). This makes the examples less impactful, but the idea is that it makes them a safe and easy jumping off point for anyone who wants to use them.
+This repository has ~5 examples of using R with Google Analytics (plus one example of using R with Twitter). These examples are designed to work with the free version of Google Analytics with just the base tag (implemented). This makes the examples less impactful, but the idea is that it makes them a safe and easy jumping off point for anyone who wants to use them.
 
 One set of slides that walks through the ideas and concepts behind these examples -- presented at Columbus Web Analytics Wednesday in January 2019 -- is available in [Google Slides](https://docs.google.com/presentation/d/1UBtbuIPmZ6yUj5VLPNYDcbV_0JSZzyyugvDPcAJd8Fs/edit?usp=sharing) or as slides with audio voiceover [on YouTube](https://youtu.be/SRZPLIcCvFU). 
 
@@ -21,6 +29,7 @@ Links to "executed code showing output" (**RPubs**) as well as links to Shiny ap
 | (Light) Text Mining of On-Site Search Data | `site-search-analysis` | [RPubs](http://rpubs.com/tgwilson/site-search) / [Shiny](https://gilligan.shinyapps.io/site-search/) |
 | (Light) Text Mining of Twitter Followers | `twitter-followers` | [RPubs](http://rpubs.com/tgwilson/twitter-followers) |
 | Regression Analysis with a Nominal / Categorical Value (Day of Week) | `regression` | [RPubs](http://rpubs.com/tgwilson/day-of-week-regression) / [Shiny](https://gilligan.shinyapps.io/regression/) |
+| Time-Series Decomposition / Holt-Winters Forecasting / Anomaly Detection | `forecasting` | [RPubs](http://rpubs.com/tgwilson/forecasting) / [Shiny](https://gilligan.shinyapps.io/forecasting/) |
 
 ## A Few Notes on the Shiny Apps
 
