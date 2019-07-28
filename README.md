@@ -1,10 +1,4 @@
----
-title: "Google Analytics (and a little bit of Twitter) and R""
-author: "Tim Wilson"
-output:
-  html_document:
-    include: includes/header.html
----
+{% include includes/header.html %}
 
 # Google Analytics (and a little bit of Twitter) and R
 
