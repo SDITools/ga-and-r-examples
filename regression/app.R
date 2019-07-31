@@ -1,3 +1,5 @@
+# Linear Regression with Day of Week as Nominal Variable
+
 # Load the necessary libraries. 
 library(shiny)
 library(googleAuthR)       # For authentication
